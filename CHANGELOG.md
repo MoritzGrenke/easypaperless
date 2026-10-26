@@ -3,10 +3,11 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.1] - Unreleased
 
 ### Added
 
+- **Current user and effective permissions** (`client.ui_settings()`, #0055): sends one authenticated `GET /api/ui_settings/` and returns the new `UiSettings` model: `user` (`id`, `username`, `is_staff`, `is_superuser`, `groups`), `permissions` (the user's effective permission codenames exactly as paperless returns them, bare such as `"add_document"`, including permissions granted via groups) and `settings` (`version`, `app_title`, `app_logo`, `trash_delay`, `auditlog_enabled`, `email_enabled`, `update_checking`; all optional, unknown fields ignored). Helpers `has_permission(codename)` and `missing_permissions(required) -> set[str]` name the permissions a user lacks (always none for a superuser). The endpoint requires the `view_uisettings` permission; without it paperless answers 403 (`PermissionDeniedError`). Available on `PaperlessClient` and `SyncPaperlessClient`; `UiSettings`, `UiSettingsUser` and `UiSettingsServerSettings` are exported from `easypaperless`. README has a new "Checking the service user's permissions" example.
 - **Read back object permissions with `full_perms`** (#0053): `get()` and `list()` of `documents`, `tags`, `correspondents`, `document_types` and `storage_paths` take a new keyword `full_perms: bool = False`. With `full_perms=True` paperless-ngx's `full_perms=true` is sent and the returned view/change users and groups are available as the new model field `permissions: SetPermissions | None` (same shape as `set_permissions`; IDs only). Without it no parameter is sent and `permissions` is `None`. With `full_perms=True` paperless-ngx omits `user_can_change` (and for documents `is_shared_by_requester`), so those fields are `None`. Custom fields, users and groups do not support `full_perms` in paperless-ngx. Available on `PaperlessClient` and `SyncPaperlessClient`.
 
 ## [0.7.0] - 2026-10-26
