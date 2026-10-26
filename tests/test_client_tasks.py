@@ -406,3 +406,45 @@ def test_exception_constructors_stay_backward_compatible() -> None:
 def test_task_accepts_integer_related_document_and_ignores_unknown_fields() -> None:
     task = Task.model_validate(task_json(related_document=42, duplicate_documents=[]))
     assert task.related_document == "42"
+
+
+# --- unknown status values -------------------------------------------------------
+
+
+def test_task_keeps_unknown_status_string_instead_of_raising() -> None:
+    task = Task.model_validate(task_json(status="RECEIVED"))
+    assert task.status == "RECEIVED"
+    assert not isinstance(task.status, TaskStatus)
+
+
+def test_task_still_parses_known_status_as_enum() -> None:
+    task = Task.model_validate(task_json(status="FAILURE"))
+    assert task.status is TaskStatus.FAILURE
+
+
+async def test_list_returns_tasks_with_unknown_status() -> None:
+    fake = FakePaperless({TASKS_PATH: [task_json(status="SOMETHING_NEW")]})
+    async with fake.async_client() as client:
+        result = await client.tasks.list()
+
+    assert result.results[0].status == "SOMETHING_NEW"
+
+
+async def test_wait_treats_unknown_status_as_not_finished() -> None:
+    fake = FakePaperless(
+        {TASKS_PATH: FakePaperless.seq([pending(status="RECEIVED")], [task_json()])}
+    )
+    async with fake.async_client() as client:
+        task = await client.tasks.wait(TASK_UUID, poll_interval=FAST)
+
+    assert task.status is TaskStatus.SUCCESS
+    assert len(fake.requests) == 2
+
+
+async def test_wait_with_only_unknown_status_times_out() -> None:
+    fake = FakePaperless({TASKS_PATH: [pending(status="RECEIVED")]})
+    async with fake.async_client() as client:
+        with pytest.raises(TaskTimeoutError) as exc_info:
+            await client.tasks.wait(TASK_UUID, poll_interval=FAST, poll_timeout=0.05)
+
+    assert exc_info.value.task_id == TASK_UUID

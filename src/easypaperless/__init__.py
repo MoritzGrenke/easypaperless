@@ -81,6 +81,7 @@ __all__ = [
     "DocumentType",
     "FieldDataType",
     "FileMetadataEntry",
+    "Group",
     "PermissionSet",
     "SearchHit",
     "SetPermissions",
@@ -94,7 +95,6 @@ __all__ = [
     "Task",
     "TaskStatus",
     "User",
-    "Group",
     "PaperlessPermission",
     # Exceptions
     "PaperlessError",

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import asyncio
+import builtins
 import logging
 import time
-from typing import TYPE_CHECKING, Any, List
+from typing import TYPE_CHECKING, Any
 
 from easypaperless._internal.sentinel import UNSET, Unset
 from easypaperless.exceptions import NotFoundError, TaskTimeoutError, UploadError
@@ -64,24 +65,11 @@ class TasksResource:
             "acknowledged": acknowledged,
         }
         params: dict[str, Any] = {k: v for k, v in filters.items() if not isinstance(v, Unset)}
-        session = self._core._session
-        resp = await session.get("/tasks/", params=params or None)
-        data = resp.json()
-        if not isinstance(data, dict):
-            tasks = [Task.model_validate(item) for item in _items(data)]
-            return PagedResult(count=len(tasks), results=tasks)
-
-        # Paginated envelope: accepted defensively, all pages are fetched.
-        items: list[Any] = _items(data)
-        next_url: str | None = data.get("next")
-        while next_url:
-            page_data = (await session.get(session._normalise_next_url(next_url))).json()
-            items.extend(_items(page_data))
-            next_url = page_data.get("next") if isinstance(page_data, dict) else None
+        raw = await self._core._session.get_list("/tasks/", params=params or None)
         return PagedResult(
-            count=data.get("count", len(items)),
-            all=data.get("all"),
-            results=[Task.model_validate(item) for item in items],
+            count=raw.count,
+            all=raw.all_ids,
+            results=[Task.model_validate(item) for item in raw.items],
         )
 
     async def get(self, task_id: str) -> Task:
@@ -118,7 +106,10 @@ class TasksResource:
         :exc:`~easypaperless.exceptions.TaskTimeoutError`.  A task that
         paperless-ngx does not list yet (right after an upload) is polled
         again rather than treated as missing.  The task is checked at least
-        once, even with ``poll_timeout=0``.
+        once, even with ``poll_timeout=0``.  A status this library does not
+        know is treated as not finished yet.  An unknown ``task_id`` therefore
+        keeps being polled until ``poll_timeout`` and then raises
+        :exc:`~easypaperless.exceptions.TaskTimeoutError`.
 
         Args:
             task_id: The task's UUID string, e.g. as returned by
@@ -154,7 +145,7 @@ class TasksResource:
             logger.debug(
                 "Polling task %r (status=%s, elapsed=%.1fs)",
                 task_id,
-                status.value if status is not None else "unknown",
+                status if status is not None else "unknown",
                 elapsed,
             )
             if task is not None and status == TaskStatus.SUCCESS:
@@ -177,36 +168,28 @@ class TasksResource:
             timeout=timeout,
         )
 
-    async def acknowledge(self, task_ids: List[int]) -> int:
+    async def acknowledge(self, ids: builtins.list[int]) -> int:
         """Mark tasks as acknowledged, as the paperless-ngx UI's "Dismiss" does.
 
         Args:
-            task_ids: Numeric task IDs (:attr:`Task.id
+            ids: Numeric task IDs (:attr:`Task.id
                 <easypaperless.models.tasks.Task.id>`, not the UUID
                 ``task_id``).
 
         Returns:
             The number of tasks paperless-ngx acknowledged.
         """
-        logger.info("Acknowledging %d task(s)", len(task_ids))
-        resp = await self._core._session.post("/tasks/acknowledge/", json={"tasks": task_ids})
+        logger.info("Acknowledging %d task(s)", len(ids))
+        resp = await self._core._session.post("/tasks/acknowledge/", json={"tasks": ids})
         body = resp.json()
         result = body.get("result") if isinstance(body, dict) else None
-        return result if isinstance(result, int) else len(task_ids)
+        return result if isinstance(result, int) else len(ids)
 
     async def _fetch(self, task_id: str) -> Task | None:
         """Return the task with ``task_id``, or ``None`` if paperless has none."""
-        resp = await self._core._session.get("/tasks/", params={"task_id": task_id})
-        items = _items(resp.json())
-        if not items:
+        raw = await self._core._session.get_list(
+            "/tasks/", params={"task_id": task_id}, all_pages=False
+        )
+        if not raw.items:
             return None
-        return Task.model_validate(items[0])
-
-
-def _items(data: Any) -> list[Any]:
-    """Task items from a plain-list response or a paginated envelope."""
-    if isinstance(data, list):
-        return data
-    if isinstance(data, dict):
-        return list(data.get("results", []))
-    return []
+        return Task.model_validate(raw.items[0])

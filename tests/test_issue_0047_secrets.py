@@ -197,13 +197,86 @@ def test_sync_client_error_does_not_contain_token(caplog: pytest.LogCaptureFixtu
 
 
 def test_upload_and_task_timeout_errors_do_not_contain_token() -> None:
-    # Constructed directly: their raising code paths are reworked in #0044/#0045.
+    # Constructed directly; the tests below raise them through the client.
     errors: list[PaperlessError] = [
         UploadError("Document processing failed: corrupt file"),
         TaskTimeoutError("Task abc did not finish within 60s"),
     ]
     for err in errors:
         _assert_no_secret_in(err)
+
+
+TASK_UUID = "c9d6a2a4-1f5e-4a8b-9a3e-2f7d1e0b6c11"
+UPLOAD = ("POST", "/api/documents/post_document/")
+TASKS = ("GET", "/api/tasks/")
+
+
+def _task(status: str, result: str | None = None) -> list[dict[str, object]]:
+    return [{"id": 17, "task_id": TASK_UUID, "status": status, "result": result}]
+
+
+def _upload_routes(status: str, result: str | None = None) -> dict[tuple[str, str], object]:
+    return {UPLOAD: httpx.Response(200, json=TASK_UUID), TASKS: _task(status, result)}
+
+
+async def test_upload_wait_failure_upload_error_does_not_contain_token(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakePaperless(_upload_routes("FAILURE", "Not consuming x.pdf: corrupt file"))
+    async with _async_client(fake) as client:
+        with caplog.at_level(logging.DEBUG, logger="easypaperless"):
+            with pytest.raises(UploadError) as exc_info:
+                await client.documents.upload(b"%PDF-1.4", filename="x.pdf", wait=True)
+    assert all(r.headers["Authorization"] == f"Token {TOKEN}" for r in fake.requests)
+    assert exc_info.value.task is not None
+    _assert_no_secret_in(exc_info.value)
+    assert TOKEN not in repr(exc_info.value.task)
+    assert caplog.records
+    assert TOKEN not in _log_text(caplog)
+
+
+async def test_upload_wait_timeout_task_timeout_error_does_not_contain_token(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    fake = FakePaperless(_upload_routes("PENDING"))
+    async with _async_client(fake, poll_interval=0.001) as client:
+        with caplog.at_level(logging.DEBUG, logger="easypaperless"):
+            with pytest.raises(TaskTimeoutError) as exc_info:
+                await client.documents.upload(
+                    b"%PDF-1.4", filename="x.pdf", wait=True, poll_timeout=0.02
+                )
+    assert exc_info.value.task_id == TASK_UUID
+    _assert_no_secret_in(exc_info.value)
+    assert caplog.records
+    assert TOKEN not in _log_text(caplog)
+
+
+async def test_tasks_wait_errors_do_not_contain_token(caplog: pytest.LogCaptureFixture) -> None:
+    failed = FakePaperless({TASKS: _task("FAILURE", "boom")})
+    pending = FakePaperless({TASKS: _task("PENDING")})
+    with caplog.at_level(logging.DEBUG, logger="easypaperless"):
+        async with _async_client(failed) as client:
+            with pytest.raises(UploadError) as upload_err:
+                await client.tasks.wait(TASK_UUID)
+        async with _async_client(pending) as client:
+            with pytest.raises(TaskTimeoutError) as timeout_err:
+                await client.tasks.wait(TASK_UUID, poll_interval=0.001, poll_timeout=0.02)
+    _assert_no_secret_in(upload_err.value)
+    _assert_no_secret_in(timeout_err.value)
+    assert TOKEN not in _log_text(caplog)
+
+
+def test_sync_tasks_wait_errors_do_not_contain_token(caplog: pytest.LogCaptureFixture) -> None:
+    with caplog.at_level(logging.DEBUG, logger="easypaperless"):
+        with _sync_client(FakePaperless(_upload_routes("FAILURE", "boom"))) as client:
+            with pytest.raises(UploadError) as upload_err:
+                client.documents.upload(b"%PDF-1.4", filename="x.pdf", wait=True)
+        with _sync_client(FakePaperless({TASKS: _task("PENDING")})) as client:
+            with pytest.raises(TaskTimeoutError) as timeout_err:
+                client.tasks.wait(TASK_UUID, poll_interval=0.001, poll_timeout=0.02)
+    _assert_no_secret_in(upload_err.value)
+    _assert_no_secret_in(timeout_err.value)
+    assert TOKEN not in _log_text(caplog)
 
 
 async def test_full_request_cycle_debug_log_has_no_token(

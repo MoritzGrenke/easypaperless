@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, cast
+import builtins
+from typing import TYPE_CHECKING, Any, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
 from easypaperless.models.paged_result import PagedResult
@@ -93,7 +94,10 @@ class SyncTasksResource:
         :exc:`~easypaperless.exceptions.TaskTimeoutError`.  A task that
         paperless-ngx does not list yet (right after an upload) is polled
         again rather than treated as missing.  The task is checked at least
-        once, even with ``poll_timeout=0``.
+        once, even with ``poll_timeout=0``.  A status this library does not
+        know is treated as not finished yet.  An unknown ``task_id`` therefore
+        keeps being polled until ``poll_timeout`` and then raises
+        :exc:`~easypaperless.exceptions.TaskTimeoutError`.
 
         Args:
             task_id: The task's UUID string, e.g. as returned by
@@ -126,15 +130,15 @@ class SyncTasksResource:
             ),
         )
 
-    def acknowledge(self, task_ids: List[int]) -> int:
+    def acknowledge(self, ids: builtins.list[int]) -> int:
         """Mark tasks as acknowledged, as the paperless-ngx UI's "Dismiss" does.
 
         Args:
-            task_ids: Numeric task IDs (:attr:`Task.id
+            ids: Numeric task IDs (:attr:`Task.id
                 <easypaperless.models.tasks.Task.id>`, not the UUID
                 ``task_id``).
 
         Returns:
             The number of tasks paperless-ngx acknowledged.
         """
-        return cast(int, self._run(self._async_tasks.acknowledge(task_ids)))
+        return cast(int, self._run(self._async_tasks.acknowledge(ids)))

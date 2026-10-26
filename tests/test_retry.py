@@ -9,7 +9,8 @@ import httpx
 import pytest
 import respx
 
-from easypaperless._internal.http import _DEFAULT_RETRY_ON, HttpSession, _sanitise_body
+from easypaperless._internal.errors import _sanitise_body
+from easypaperless._internal.http import _DEFAULT_RETRY_ON, HttpSession
 from easypaperless.exceptions import (
     NotFoundError,
     RetryExhaustedError,
@@ -181,7 +182,7 @@ async def test_backoff_doubles_each_attempt() -> None:
 
 
 # ---------------------------------------------------------------------------
-# HTML body sanitisation in _raise_for_status
+# HTML body sanitisation in raise_for_status
 # ---------------------------------------------------------------------------
 
 
@@ -276,13 +277,13 @@ async def test_retry_logs_debug_per_attempt(caplog: pytest.LogCaptureFixture) ->
 
 
 def test_sanitise_body_empty_string() -> None:
-    from easypaperless._internal.http import _sanitise_body
+    from easypaperless._internal.errors import _sanitise_body
 
     assert _sanitise_body("") == ""
 
 
 def test_sanitise_body_whitespace_only() -> None:
-    from easypaperless._internal.http import _sanitise_body
+    from easypaperless._internal.errors import _sanitise_body
 
     body = "   "
     assert _sanitise_body(body) == body
