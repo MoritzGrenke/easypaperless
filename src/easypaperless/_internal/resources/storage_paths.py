@@ -81,11 +81,11 @@ class StoragePathsResource:
             params["page_size"] = page_size
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
-        if full_perms:
-            params["full_perms"] = "true"
         return cast(
             PagedResult[StoragePath],
-            await self._core._list_resource("storage_paths", StoragePath, params or None),
+            await self._core._list_resource(
+                "storage_paths", StoragePath, params or None, full_perms=full_perms
+            ),
         )
 
     async def get(self, id: int, *, full_perms: bool = False) -> StoragePath:
@@ -103,7 +103,7 @@ class StoragePathsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no storage path exists with that ID.
         """
-        logger.info("Getting storage path id=%d", id)
+        logger.info("Getting storage path id=%d full_perms=%s", id, full_perms)
         return cast(
             StoragePath,
             await self._core._get_resource("storage_paths", id, StoragePath, full_perms=full_perms),

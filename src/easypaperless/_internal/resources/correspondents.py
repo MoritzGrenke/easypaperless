@@ -73,11 +73,11 @@ class CorrespondentsResource:
             params["page_size"] = page_size
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
-        if full_perms:
-            params["full_perms"] = "true"
         return cast(
             PagedResult[Correspondent],
-            await self._core._list_resource("correspondents", Correspondent, params or None),
+            await self._core._list_resource(
+                "correspondents", Correspondent, params or None, full_perms=full_perms
+            ),
         )
 
     async def get(self, id: int, *, full_perms: bool = False) -> Correspondent:
@@ -95,7 +95,7 @@ class CorrespondentsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no correspondent exists with that ID.
         """
-        logger.info("Getting correspondent id=%d", id)
+        logger.info("Getting correspondent id=%d full_perms=%s", id, full_perms)
         return cast(
             Correspondent,
             await self._core._get_resource(

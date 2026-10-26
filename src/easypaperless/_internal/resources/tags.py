@@ -73,11 +73,9 @@ class TagsResource:
             params["page_size"] = page_size
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
-        if full_perms:
-            params["full_perms"] = "true"
         return cast(
             PagedResult[Tag],
-            await self._core._list_resource("tags", Tag, params or None),
+            await self._core._list_resource("tags", Tag, params or None, full_perms=full_perms),
         )
 
     async def get(self, id: int, *, full_perms: bool = False) -> Tag:
@@ -96,7 +94,7 @@ class TagsResource:
             ~easypaperless.exceptions.NotFoundError: If no tag exists with
                 that ID.
         """
-        logger.info("Getting tag id=%d", id)
+        logger.info("Getting tag id=%d full_perms=%s", id, full_perms)
         return cast(Tag, await self._core._get_resource("tags", id, Tag, full_perms=full_perms))
 
     async def create(

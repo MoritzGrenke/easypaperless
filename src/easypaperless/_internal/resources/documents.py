@@ -171,7 +171,7 @@ class DocumentsResource:
                 with that ID.
         """
         logger.info("Getting document id=%d full_perms=%s", id, full_perms)
-        params = {"full_perms": "true"} if full_perms else None
+        params = self._core._with_full_perms(None, full_perms)
         if include_metadata:
             doc_resp, meta_resp = await asyncio.gather(
                 self._core._session.get(f"/documents/{id}/", params=params),
@@ -496,8 +496,7 @@ class DocumentsResource:
         if checksum is not None:
             params["checksum__iexact"] = checksum
 
-        if full_perms:
-            params["full_perms"] = "true"
+        params = self._core._with_full_perms(params, full_perms) or {}
 
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering

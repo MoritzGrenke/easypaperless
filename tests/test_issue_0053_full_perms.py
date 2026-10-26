@@ -89,6 +89,30 @@ async def test_documents_list_without_full_perms_sends_no_flag() -> None:
     assert [d.permissions for d in result.results] == [None]
 
 
+async def test_documents_list_full_perms_returns_permissions_on_every_page() -> None:
+    # paperless-ngx keeps full_perms in the ``next`` URL; documents of page 2 must
+    # carry permissions as well.
+    detail = _like_paperless(DOCUMENT)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        page = int(request.url.params.get("page", "1"))
+        item = {**detail(request).json(), "id": 40 + page}
+        next_url = (
+            "http://paperless.test/api/documents/?full_perms=true&page=2" if page == 1 else None
+        )
+        return httpx.Response(
+            200, json={"count": 2, "next": next_url, "previous": None, "results": [item]}
+        )
+
+    fake = FakePaperless({("GET", "/api/documents/"): handler})
+    async with fake.async_client() as client:
+        result = await client.documents.list(full_perms=True)
+
+    assert [d.id for d in result.results] == [41, 42]
+    assert [d.permissions for d in result.results] == [PERMS, PERMS]
+    assert [r.url.params.get("full_perms") for r in fake.requests] == ["true", "true"]
+
+
 def test_sync_documents_get_and_list_full_perms() -> None:
     fake = FakePaperless(
         {

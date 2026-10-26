@@ -73,11 +73,11 @@ class DocumentTypesResource:
             params["page_size"] = page_size
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
-        if full_perms:
-            params["full_perms"] = "true"
         return cast(
             PagedResult[DocumentType],
-            await self._core._list_resource("document_types", DocumentType, params or None),
+            await self._core._list_resource(
+                "document_types", DocumentType, params or None, full_perms=full_perms
+            ),
         )
 
     async def get(self, id: int, *, full_perms: bool = False) -> DocumentType:
@@ -95,7 +95,7 @@ class DocumentTypesResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document type exists with that ID.
         """
-        logger.info("Getting document type id=%d", id)
+        logger.info("Getting document type id=%d full_perms=%s", id, full_perms)
         return cast(
             DocumentType,
             await self._core._get_resource(

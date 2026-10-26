@@ -97,12 +97,22 @@ class _ClientCore:
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
 
+    @staticmethod
+    def _with_full_perms(params: dict[str, Any] | None, full_perms: bool) -> dict[str, Any] | None:
+        """Return *params* plus ``full_perms=true`` when *full_perms* is set (#0053)."""
+        if not full_perms:
+            return params
+        return {**(params or {}), "full_perms": "true"}
+
     async def _list_resource(
         self,
         resource: str,
         model_class: type[Any],
         params: dict[str, Any] | None = None,
+        *,
+        full_perms: bool = False,
     ) -> PagedResult[Any]:
+        params = self._with_full_perms(params, full_perms)
         if params and "page" in params:
             raw = await self._session.get_page(f"/{resource}/", params=params)
         else:
@@ -123,7 +133,7 @@ class _ClientCore:
     async def _get_resource(
         self, resource: str, id: int, model_class: type[Any], *, full_perms: bool = False
     ) -> Any:
-        params = {"full_perms": "true"} if full_perms else None
+        params = self._with_full_perms(None, full_perms)
         resp = await self._session.get(f"/{resource}/{id}/", params=params)
         return model_class.model_validate(resp.json())
 
