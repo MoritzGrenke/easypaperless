@@ -19,8 +19,10 @@ from easypaperless._internal.resources.tags import TagsResource
 from easypaperless._internal.resources.trash import TrashResource
 from easypaperless._internal.resources.users import UsersResource
 from easypaperless._internal.sentinel import UNSET, Unset
+from easypaperless.exceptions import NotFoundError, NotPaperlessError
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import SetPermissions
+from easypaperless.models.system_status import SystemStatus
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +206,9 @@ class PaperlessClient(_ClientCore):
     * ``client.trash`` — list, restore, and permanently delete trashed documents -
       see `easypaperless.resources.TrashResource`
 
+    Server information is available directly on the client:
+    :meth:`server_version` (connection check) and :meth:`system_status`.
+
     Use as an async context manager to ensure the underlying HTTP connection
     pool is closed when you are done:
 
@@ -303,3 +308,74 @@ class PaperlessClient(_ClientCore):
 
     async def __aexit__(self, *args: Any) -> None:
         await self.close()
+
+    async def server_version(self) -> str:
+        """Return the paperless-ngx version and verify URL and token.
+
+        Sends one authenticated ``GET /api/`` and reads the ``X-Version``
+        response header. This is a cheap "test connection" call.
+
+        Returns:
+            The paperless-ngx version string, e.g. ``"2.18.4"``.
+
+        Raises:
+            ~easypaperless.exceptions.NotPaperlessError: The URL does not point
+                to a paperless-ngx instance: the API root answered with 404, or
+                with a response (e.g. an HTML page, also after a redirect) that
+                lacks the ``X-Version`` header.
+            ~easypaperless.exceptions.AuthenticationError: The token was
+                refused (401).
+            ~easypaperless.exceptions.PermissionDeniedError: The token lacks
+                permission (403).
+            ~easypaperless.exceptions.TransportError: The server could not be
+                reached (connection refused, DNS, TLS, timeout).
+
+        Example:
+            >>> version = await client.server_version()
+            >>> print(version)
+            2.18.4
+        """
+        logger.info("Getting server version")
+        url = f"{self._session._base_url}/"
+        try:
+            resp = await self._session.get("/")
+        except NotFoundError as exc:
+            raise NotPaperlessError(
+                f"{url} does not appear to be a paperless-ngx instance: "
+                "the API root answered with 404 Not Found.",
+                status_code=exc.status_code,
+            ) from exc
+        version: str | None = resp.headers.get("X-Version")
+        if not version:
+            raise NotPaperlessError(
+                f"{url} does not appear to be a paperless-ngx instance: "
+                "the response carries no X-Version header.",
+                status_code=resp.status_code,
+            )
+        return version
+
+    async def system_status(self) -> SystemStatus:
+        """Return paperless-ngx's system status (``GET /api/status/``).
+
+        Covers version, install type, server OS, storage, database, and the
+        health of Redis, Celery, the search index and the classifier. Every
+        field of the returned model is optional; fields a paperless version
+        does not send stay ``None``, unknown fields are ignored.
+
+        Returns:
+            A :class:`~easypaperless.models.system_status.SystemStatus`.
+
+        Raises:
+            ~easypaperless.exceptions.PermissionDeniedError: The token's user
+                is not an administrator (403).
+            ~easypaperless.exceptions.AuthenticationError: The token was
+                refused (401).
+
+        Example:
+            >>> status = await client.system_status()
+            >>> status.database.status
+            'OK'
+        """
+        logger.info("Getting system status")
+        resp = await self._session.get("/status/")
+        return SystemStatus.model_validate(resp.json())
