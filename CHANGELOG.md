@@ -3,7 +3,7 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+## [0.7.0] - 2026-10-26
 
 ### Added
 
@@ -13,7 +13,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Groups resource** (`client.groups`, #0049): `list()` (returns `PagedResult[Group]`; `name_contains`, `name_exact`, `ordering`, `page`, `page_size`), `get()`, `create(name=..., permissions=...)`, `update()` (PATCH, sends only the fields you pass) and `delete()`, on both `PaperlessClient` and `SyncPaperlessClient`. New public `Group` model (`id`, `name`, `permissions`). Look up group IDs here for `set_permissions`.
 - **Python 3.13 officially supported; CI workflow** (#0051): Python 3.13 is now listed in the package classifiers. A new GitHub Actions workflow (`.github/workflows/ci.yml`) runs the test suite, `ruff check`, `ruff format --check` and `mypy` on Python 3.11, 3.12 and 3.13 for every push and pull request. `tenacity` was added to the `dev` extras so the tenacity retry tests run in CI.
 - **Injectable HTTP transport** (`PaperlessClient` / `SyncPaperlessClient`, #0043): New keyword-only `transport: httpx.AsyncBaseTransport | None = None` constructor parameter, passed to the internal `httpx.AsyncClient`. Use it with `httpx.MockTransport` for tests without global patching, or with a custom `httpx.AsyncHTTPTransport` (proxy, local address, TLS). Auth header, base URL, timeout, redirects and retries remain controlled by easypaperless. Using `SyncPaperlessClient` from a worker thread while another event loop runs in the main thread is now documented and tested.
-
 - **Classifiable error hierarchy** (#0046): New exception subclasses, all exported from `easypaperless` and backward compatible with existing `except` clauses: `AuthenticationError` (401) and `PermissionDeniedError` (403, message is paperless's `detail` verbatim) under `AuthError`; `BadRequestError` (400) with parsed `field_errors` (field → list of messages) and `non_field_errors`; `ServerResponseError` (5xx) and `TransportError` (connection refused, DNS, TLS, protocol errors; `status_code=None`, original `httpx` exception as `__cause__`) with `TransportTimeoutError` under `ServerError`. Error messages are now built from every paperless error body shape (`detail`, field-error dicts, `non_field_errors`, plain lists, non-JSON). README has a new "Error Handling" section.
 - **Upload from bytes, file name, content type and per-call timeout** (`documents.upload()`, #0044): `file` now also accepts `bytes` (with the new `filename`, which is then required — omitting it raises `ValidationError` before any request; no temporary file is written). `filename` also overrides the name taken from a path, `content_type` sets the MIME type of the file part as given (otherwise guessed from the file name as before), and `request_timeout` sets the HTTP timeout of the upload request only. `poll_interval` / `poll_timeout` and the return values are unchanged. Available on `PaperlessClient` and `SyncPaperlessClient`.
 
