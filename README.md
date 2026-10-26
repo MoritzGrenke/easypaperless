@@ -219,7 +219,11 @@ except ServerResponseError as err:
     print(f"paperless returned {err.status_code}")
 ```
 
+### Retries
+
 The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
+
+Requests that create something are **never retried**, whatever `retry_attempts` or `tenacity_retrying` say: `documents.upload()`, every resource's `create()` and `documents.notes.create()`. If the response is lost after paperless has already accepted the request (e.g. a timeout), a retry would create a duplicate. These calls send exactly one request and raise the error (e.g. `TransportTimeoutError`), so you can decide yourself whether to check and try again. All other requests (GET, PATCH, DELETE and the bulk/trash/task-acknowledge POSTs) keep retrying.
 
 ## 🔒 Security: Secrets in Logs and Errors
 
@@ -268,7 +272,13 @@ print(status.database.status, status.tasks.celery_status)
 * **delete()** Permanently remove a document from your Paperless-ngx instance.
 * **download()** Download the binary content of a document — either the archived PDF or the original file.
 * **thumbnail()** Download the thumbnail image of a document as raw bytes.
-* **upload()** Upload a new file to Paperless-ngx and optionally wait for the processing task to complete.
+* **upload()** Upload a new file to Paperless-ngx and optionally wait for the processing task to complete. Accepts a path or in-memory `bytes` (then `filename` is required; no temporary file is written), plus optional `filename`, `content_type` and a per-call `request_timeout` for the upload request. The upload request is never retried automatically (see [Retries](#retries)).
+
+```python
+task_id = await client.documents.upload(
+    pdf_bytes, filename="capture.pdf", content_type="application/pdf", request_timeout=120
+)
+```
 * **history()** Retrieve the full audit log for a document as a `PagedResult[AuditLogEntry]`, showing who changed what and when.
 
 #### Document Bulk Operations

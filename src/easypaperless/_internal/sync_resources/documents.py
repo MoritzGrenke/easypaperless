@@ -459,8 +459,11 @@ class SyncDocumentsResource:
 
     def upload(
         self,
-        file: str | Path,
+        file: str | Path | bytes,
         *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        request_timeout: float | None = None,
         title: str | Unset = UNSET,
         created: date | str | None = None,
         correspondent: int | str | None | Unset = UNSET,
@@ -475,8 +478,28 @@ class SyncDocumentsResource:
     ) -> str | Document:
         """Upload a document to paperless-ngx.
 
+        The upload request is never retried automatically, whatever the
+        client's ``retry_attempts`` / ``tenacity_retrying`` settings: if the
+        connection fails after paperless-ngx has accepted the file, a retry
+        would create a duplicate.  A failed upload raises (e.g.
+        :exc:`~easypaperless.exceptions.TransportTimeoutError`) so you can
+        decide whether to check for the document and upload again.
+
         Args:
-            file: Path to the file to upload.
+            file: Path to the file to upload (``str`` or :class:`~pathlib.Path`),
+                or the file content as ``bytes``.  Bytes are sent directly; no
+                temporary file is written.
+            filename: File name sent to paperless-ngx.  Required when *file* is
+                ``bytes`` (omitting it raises
+                :exc:`~easypaperless.exceptions.ValidationError` before any
+                request).  For a path, overrides the name taken from the path.
+            content_type: MIME type of the file part, sent as given (e.g.
+                ``"application/pdf"``).  When omitted, it is guessed from the
+                file name as before.
+            request_timeout: HTTP timeout in seconds for the upload request
+                only, overriding the client's ``timeout`` for this call.  Does
+                not affect task polling (see ``poll_timeout``).  When omitted,
+                the client's ``timeout`` applies.
             title: Title to assign to the document.
             created: Creation date as an ISO-8601 string (``"YYYY-MM-DD"``) or a
                 :class:`~datetime.date` object.
@@ -504,6 +527,8 @@ class SyncDocumentsResource:
             when ``wait=True``.
 
         Raises:
+            ~easypaperless.exceptions.ValidationError: If *file* is ``bytes``
+                and no *filename* is given.
             ~easypaperless.exceptions.UploadError: If processing fails;
                 ``err.task`` holds the task with paperless-ngx's ``result``
                 unaltered (e.g. to recognise a duplicate).
@@ -515,6 +540,9 @@ class SyncDocumentsResource:
             self._run(
                 self._async_documents.upload(
                     file,
+                    filename=filename,
+                    content_type=content_type,
+                    request_timeout=request_timeout,
                     title=title,
                     created=created,
                     correspondent=correspondent,

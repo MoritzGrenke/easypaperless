@@ -137,7 +137,8 @@ class _ClientCore:
                 if set_permissions is None
                 else set_permissions.model_dump()
             )
-        resp = await self._session.post(f"/{resource}/", json=payload)
+        # Never retried: a retry after a lost response could create a duplicate (#0044).
+        resp = await self._session.post(f"/{resource}/", json=payload, retry=False)
         self._resolver.invalidate(resource)
         return model_class.model_validate(resp.json())
 
@@ -252,7 +253,11 @@ class PaperlessClient(_ClientCore):
                 Default: ``60.0``.
             retry_attempts: Maximum number of retry attempts after the first
                 failure.  ``0`` (the default) disables retrying entirely,
-                preserving backward-compatible behaviour.
+                preserving backward-compatible behaviour.  Requests that
+                create something are never retried: ``documents.upload()``,
+                every resource's ``create()`` and ``documents.notes.create()``
+                send exactly one request and raise the error, because a retry
+                after a lost response could create a duplicate.
             retry_backoff: Initial sleep in seconds between retry attempts;
                 doubles on each subsequent attempt.  Default: ``1.0``.
             retry_on: Tuple of exception types that trigger a retry.  Defaults
@@ -270,12 +275,15 @@ class PaperlessClient(_ClientCore):
                 retry only 5xx responses, pass
                 ``retry_on=(ServerResponseError,)``.  Retries apply to every
                 request path, including downloads and follow-up pages of
-                paginated lists.
+                paginated lists, except the create requests listed under
+                ``retry_attempts``.
             tenacity_retrying: An optional pre-configured
                 ``tenacity.AsyncRetrying`` instance.  When supplied, the
                 ``retry_attempts``, ``retry_backoff``, and ``retry_on``
                 parameters are ignored and tenacity drives the retry loop
-                instead.  Must be ``AsyncRetrying`` — the sync
+                instead.  Requests that create something (``upload()``,
+                ``create()``, ``notes.create()``) bypass it and are never
+                retried, as with ``retry_attempts``.  Must be ``AsyncRetrying`` — the sync
                 ``tenacity.Retrying`` is not compatible with the async HTTP
                 layer used internally.
             transport: Optional ``httpx.AsyncBaseTransport`` passed to the

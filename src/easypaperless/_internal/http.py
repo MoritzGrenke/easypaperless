@@ -161,7 +161,15 @@ class HttpSession:
         data: dict[str, Any] | None = None,
         files: Any = None,
         timeout: float | None = None,
+        retry: bool = True,
     ) -> httpx.Response:
+        """Send a request under the retry policy.
+
+        ``retry=False`` sends exactly one attempt regardless of the client's
+        retry configuration (built-in loop and ``tenacity_retrying``).  Used for
+        requests that create something, where a retry after a lost response
+        could create a duplicate (#0044).
+        """
         if logger.isEnabledFor(logging.DEBUG):
             if json is not None:
                 logger.debug("%s %s body=%s", method.upper(), path, _mask_secrets(json))
@@ -178,6 +186,7 @@ class HttpSession:
             lambda: self._do_request(
                 method, path, params=params, json=json, data=data, files=files, timeout=timeout
             ),
+            retry=retry,
         )
 
     async def _retrying(
@@ -185,12 +194,18 @@ class HttpSession:
         method: str,
         path: str,
         attempt_fn: Callable[[], Awaitable[httpx.Response]],
+        *,
+        retry: bool = True,
     ) -> httpx.Response:
         """Run *attempt_fn* under the configured retry policy.
 
         Shared by every request path (single requests, downloads and follow-up
-        pages) so they all retry the same way.
+        pages) so they all retry the same way.  With ``retry=False`` the
+        attempt runs exactly once and any error propagates unchanged.
         """
+        if not retry:
+            return await attempt_fn()
+
         # tenacity-based retry path
         if self._tenacity_retrying is not None:
             async for attempt in self._tenacity_retrying:
@@ -269,8 +284,11 @@ class HttpSession:
         data: dict[str, Any] | None = None,
         files: Any = None,
         timeout: float | None = None,
+        retry: bool = True,
     ) -> httpx.Response:
-        return await self.request("POST", path, json=json, data=data, files=files, timeout=timeout)
+        return await self.request(
+            "POST", path, json=json, data=data, files=files, timeout=timeout, retry=retry
+        )
 
     async def patch(self, path: str, *, json: Any = None) -> httpx.Response:
         return await self.request("PATCH", path, json=json)
