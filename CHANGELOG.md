@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Read back object permissions with `full_perms`** (#0053): `get()` and `list()` of `documents`, `tags`, `correspondents`, `document_types` and `storage_paths` take a new keyword `full_perms: bool = False`. With `full_perms=True` paperless-ngx's `full_perms=true` is sent and the returned view/change users and groups are available as the new model field `permissions: SetPermissions | None` (same shape as `set_permissions`; IDs only). Without it no parameter is sent and `permissions` is `None`. With `full_perms=True` paperless-ngx omits `user_can_change` (and for documents `is_shared_by_requester`), so those fields are `None`. Custom fields, users and groups do not support `full_perms` in paperless-ngx. Available on `PaperlessClient` and `SyncPaperlessClient`.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added

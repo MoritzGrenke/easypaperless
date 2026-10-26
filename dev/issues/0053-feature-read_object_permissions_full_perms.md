@@ -41,13 +41,13 @@ Allow callers to read the view/change permissions of documents (and other owned 
 ---
 
 ## Acceptance Criteria
-- [ ] `documents.get(id, full_perms=True)` sends `full_perms=true` and returns a `Document` whose permission field contains the view and change users and groups from paperless's response.
-- [ ] `documents.get(id)` without the option sends no `full_perms` parameter and the permission field is `None`.
-- [ ] `documents.list(full_perms=True)` returns documents with populated permission fields.
-- [ ] Every other resource that supports `full_perms` (as found by the spike) offers the same option on `get()` and `list()` with the same behaviour.
-- [ ] After `documents.update(id, owner=a, set_permissions=<view+change for user b>)`, `documents.get(id, full_perms=True)` reflects owner `a` and user `b` in view and change (integration test against a live instance).
-- [ ] `tests/integration/test_delivery_flow.py` no longer uses private client internals to read permissions.
-- [ ] The sync client offers the identical API.
+- [x] `documents.get(id, full_perms=True)` sends `full_perms=true` and returns a `Document` whose permission field contains the view and change users and groups from paperless's response.
+- [x] `documents.get(id)` without the option sends no `full_perms` parameter and the permission field is `None`.
+- [x] `documents.list(full_perms=True)` returns documents with populated permission fields.
+- [x] Every other resource that supports `full_perms` (as found by the spike) offers the same option on `get()` and `list()` with the same behaviour.
+- [x] After `documents.update(id, owner=a, set_permissions=<view+change for user b>)`, `documents.get(id, full_perms=True)` reflects owner `a` and user `b` in view and change (integration test against a live instance).
+- [x] `tests/integration/test_delivery_flow.py` no longer uses private client internals to read permissions.
+- [x] The sync client offers the identical API.
 
 ---
 

@@ -327,6 +327,24 @@ task_id = await client.documents.upload(
 * **bulk_delete()** Batch delete storage paths.
 * **bulk_set_permissions()** Batch update access control and ownership for storage paths.
 
+### Reading Object Permissions (`full_perms`)
+
+`get()` and `list()` of `documents`, `tags`, `correspondents`, `document_types` and `storage_paths` accept `full_perms=True`. The view/change users and groups (IDs) are then available as `.permissions`, a `SetPermissions` model with the same shape you pass to `set_permissions`. Without `full_perms` the field is `None`. Note that with `full_perms=True` paperless-ngx leaves out `user_can_change` (and for documents `is_shared_by_requester`), so those fields are `None`.
+
+```python
+from easypaperless import PermissionSet, SetPermissions
+
+perms = SetPermissions(view=PermissionSet(users=[7]), change=PermissionSet(users=[7]))
+await client.documents.update(42, owner=3, set_permissions=perms)
+
+doc = await client.documents.get(42, full_perms=True)
+assert doc.owner == 3 and doc.permissions == perms
+
+tags = await client.tags.list(full_perms=True)
+for tag in tags.results:
+    print(tag.name, tag.owner, tag.permissions.view.groups)
+```
+
 ### `client.custom_fields` — Custom Fields
 
 * **list() / get() / create() / update() / delete()** Full CRUD for user-defined metadata fields for advanced document tracking.
