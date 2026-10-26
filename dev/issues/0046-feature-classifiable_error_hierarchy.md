@@ -56,15 +56,15 @@ A delivery worker must decide per error whether to retry, alert, or give up — 
 ---
 
 ## Acceptance Criteria
-- [ ] A 401 raises the 401 subclass; `isinstance(err, AuthError)` is `True`; `err.status_code == 401`.
-- [ ] A 403 raises the 403 subclass; `isinstance(err, AuthError)` is `True`; `str(err)` contains paperless's `detail` text verbatim.
-- [ ] A 400 with body `{"title": ["This field is required."]}` raises the 400 class; its field errors equal `{"title": ["This field is required."]}`; `err.status_code == 400`.
-- [ ] A 400 with `non_field_errors` or a plain list body is parsed without crashing and its messages are exposed.
-- [ ] A 500/502/503 raises the 5xx subclass with the right `status_code`; `isinstance(err, ServerError)` is `True`.
-- [ ] Connection refused, DNS failure, TLS failure and timeout raise the transport subclass with `status_code is None`; `err.__cause__` is the original `httpx` exception; `isinstance(err, ServerError)` is `True`.
-- [ ] Every raised easypaperless exception exposes `status_code` and a non-empty message.
-- [ ] All existing tests that catch `AuthError`, `ServerError`, `PaperlessError` still pass.
-- [ ] The error-handling documentation lists every class.
+- [x] A 401 raises the 401 subclass; `isinstance(err, AuthError)` is `True`; `err.status_code == 401`.
+- [x] A 403 raises the 403 subclass; `isinstance(err, AuthError)` is `True`; `str(err)` contains paperless's `detail` text verbatim.
+- [x] A 400 with body `{"title": ["This field is required."]}` raises the 400 class; its field errors equal `{"title": ["This field is required."]}`; `err.status_code == 400`.
+- [x] A 400 with `non_field_errors` or a plain list body is parsed without crashing and its messages are exposed.
+- [x] A 500/502/503 raises the 5xx subclass with the right `status_code`; `isinstance(err, ServerError)` is `True`.
+- [x] Connection refused, DNS failure, TLS failure and timeout raise the transport subclass with `status_code is None`; `err.__cause__` is the original `httpx` exception; `isinstance(err, ServerError)` is `True`.
+- [x] Every raised easypaperless exception exposes `status_code` and a non-empty message.
+- [x] All existing tests that catch `AuthError`, `ServerError`, `PaperlessError` still pass.
+- [x] The error-handling documentation lists every class.
 
 ---
 
@@ -83,3 +83,15 @@ A delivery worker must decide per error whether to retry, alert, or give up — 
 
 ## Additional Notes
 - Requester: ThruCapture Backend, Must-item 7.
+
+---
+
+## Implementation Notes
+- Final names: `AuthenticationError`, `PermissionDeniedError` (under `AuthError`), `BadRequestError` (under `PaperlessError`), `ServerResponseError`, `TransportError` → `TransportTimeoutError` (under `ServerError`).
+- Single mapping point: `_internal/errors.py` (`map_transport_error()` for httpx exceptions, `raise_for_status()` for responses). `HttpSession._send()` is the only call into the httpx client; single requests, downloads incl. every redirect hop, and follow-up pages all go through it.
+- Downloads and follow-up pages now run under the same retry policy (`HttpSession._retrying()`); a download's redirect chain counts as one attempt.
+- A download/thumbnail that returns an HTML page now raises `ServerResponseError` with the response's status code (was a bare `ServerError` with `status_code=None`).
+- Tests: `tests/test_issue_0046_error_hierarchy.py` (FakePaperless transport, async + sync).
+
+## Assumptions
+- The live paperless instance was not reachable during implementation, so error body shapes were not verified against a real server. The parser assumes the standard Django REST Framework formats that paperless-ngx produces: `{"detail": "..."}`, a dict of field → list of strings (values may also be a plain string or nested dicts/lists, e.g. for `custom_fields`), a `non_field_errors` key, and a plain JSON list. Non-JSON bodies (e.g. proxy HTML pages) are reduced to a short excerpt.

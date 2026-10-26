@@ -239,11 +239,18 @@ class PaperlessClient(_ClientCore):
                 to ``(ServerError, httpx.TimeoutException, httpx.ConnectError)``.
                 ``NotFoundError`` is intentionally excluded from the default set
                 so that genuine 404 responses are never silently retried.
-                Note: ``httpx.TimeoutException`` and ``httpx.ConnectError`` are
-                intercepted inside the HTTP layer and re-raised as ``ServerError``
-                before the retry loop runs, so including them in a custom
-                ``retry_on`` tuple has no effect unless ``ServerError`` is also
-                present.
+                Note: every ``httpx`` exception is converted inside the HTTP
+                layer before the retry loop sees it — timeouts become
+                :exc:`~easypaperless.exceptions.TransportTimeoutError`, all
+                other ``httpx`` errors (connection refused, DNS, TLS, protocol)
+                become :exc:`~easypaperless.exceptions.TransportError`; both are
+                ``ServerError`` subclasses. The ``httpx`` entries therefore
+                never match on their own: to retry only transport failures but
+                not 5xx responses, pass ``retry_on=(TransportError,)``; to
+                retry only 5xx responses, pass
+                ``retry_on=(ServerResponseError,)``.  Retries apply to every
+                request path, including downloads and follow-up pages of
+                paginated lists.
             tenacity_retrying: An optional pre-configured
                 ``tenacity.AsyncRetrying`` instance.  When supplied, the
                 ``retry_attempts``, ``retry_backoff``, and ``retry_on``

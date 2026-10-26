@@ -159,6 +159,66 @@ with SyncPaperlessClient(url="http://paperless.test", api_token="t",
 
 With `SyncPaperlessClient` the handler runs on the client's internal loop thread. A custom `httpx.AsyncHTTPTransport(proxy=..., local_address=..., verify=...)` works the same way.
 
+## ⚠️ Error Handling
+
+Every exception raised by easypaperless derives from `PaperlessError` and is importable from `easypaperless`. Each one has a non-empty message and a `status_code` attribute (the HTTP status, or `None` when no response was received).
+
+```
+PaperlessError
+├── AuthError
+│   ├── AuthenticationError     401 – token missing or invalid
+│   └── PermissionDeniedError   403 – token valid, permission missing
+├── BadRequestError             400 – .field_errors, .non_field_errors
+├── NotFoundError               404, or a name that could not be resolved
+├── ValidationError             422
+├── ServerError
+│   ├── ServerResponseError     5xx response (status_code set)
+│   └── TransportError          no response: connection refused, DNS, TLS, protocol error
+│       └── TransportTimeoutError   connect/read/write/pool timeout
+├── UploadError                 document processing task failed
+├── TaskTimeoutError            upload polling exceeded poll_timeout
+└── RetryExhaustedError         all retry attempts failed (last error chained as __cause__)
+```
+
+| Exception | Raised when | `status_code` |
+|-----------|-------------|---------------|
+| `AuthenticationError` | HTTP 401: the API token is missing or invalid | `401` |
+| `PermissionDeniedError` | HTTP 403: the token is valid but lacks a permission; the message is paperless's `detail` text verbatim | `403` |
+| `BadRequestError` | HTTP 400: paperless rejected the request data. `field_errors` maps field name → list of messages, `non_field_errors` holds the rest | `400` |
+| `NotFoundError` | HTTP 404, or a tag/correspondent/... name could not be resolved | `404` / `None` |
+| `ValidationError` | HTTP 422 | `422` |
+| `ServerResponseError` | HTTP 5xx, or a download returned an HTML page instead of the file | the HTTP status |
+| `TransportError` | paperless could not be reached: connection refused, DNS or TLS failure, broken connection. The original `httpx` exception is chained as `__cause__` | `None` |
+| `TransportTimeoutError` | the request timed out (the operation may still have completed on the server) | `None` |
+| `UploadError` | the processing task of an upload reports `FAILURE`/`REVOKED`, or succeeds without a document ID | `None` |
+| `TaskTimeoutError` | `upload(wait=True)` did not finish within `poll_timeout` | `None` |
+| `RetryExhaustedError` | all `retry_attempts` failed; `.attempts`, `.url`, last error as `__cause__` | `None` |
+| `PaperlessError` | any other HTTP error status (e.g. 409, 429) | the HTTP status |
+
+The classes are subclasses of the earlier ones, so existing `except AuthError` / `except ServerError` clauses keep working. Catching a more specific class lets you react differently:
+
+```python
+from easypaperless import (
+    BadRequestError, PermissionDeniedError, AuthenticationError,
+    ServerResponseError, TransportError,
+)
+
+try:
+    await client.tags.create(name="")
+except BadRequestError as err:
+    print(err.field_errors)          # {"name": ["This field may not be blank."]}
+except PermissionDeniedError as err:
+    print(f"grant permission: {err}")
+except AuthenticationError:
+    print("check your API token")
+except TransportError:
+    print("paperless unreachable — retry later")
+except ServerResponseError as err:
+    print(f"paperless returned {err.status_code}")
+```
+
+The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
+
 ## 📖 Functional Overview
 
 All functionality is accessed through resource attributes on the client (e.g. `client.documents`, `client.tags`). Both `PaperlessClient` (async) and `SyncPaperlessClient` (sync) expose the same resources and methods.
