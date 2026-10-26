@@ -46,11 +46,11 @@ Possible directions (to be decided in `/architecture`, not part of this bug repo
 ---
 
 ## Acceptance Criteria
-- [ ] With a response list whose last element is another user's note (and the caller's note earlier in the list), `notes.create()` returns the caller's note (correct ID, text and user).
-- [ ] With a response list containing only the caller's new note at the end (normal case), behaviour is unchanged.
-- [ ] If the created note cannot be identified unambiguously, the documented behaviour applies and is covered by a test.
-- [ ] Async and sync clients behave identically.
-- [ ] Tests use the injected transport (`FakePaperless`, tests/_transport.py) with response shapes recorded in #0050.
+- [x] With a response list whose last element is another user's note (and the caller's note earlier in the list), `notes.create()` returns the caller's note (correct ID, text and user).
+- [x] With a response list containing only the caller's new note at the end (normal case), behaviour is unchanged.
+- [x] If the created note cannot be identified unambiguously, the documented behaviour applies and is covered by a test.
+- [x] Async and sync clients behave identically.
+- [x] Tests use the injected transport (`FakePaperless`, tests/_transport.py) with response shapes recorded in #0050.
 
 ---
 
