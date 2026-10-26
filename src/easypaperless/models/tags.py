@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from easypaperless.models._base import MatchingAlgorithm
+from easypaperless.models.permissions import SetPermissions
 
 
 class Tag(BaseModel):
@@ -19,6 +20,8 @@ class Tag(BaseModel):
         document_count: Number of documents currently assigned to this tag.
         parent: ID of the parent tag for hierarchical tag trees, or ``None``.
         children: IDs of child tags, or ``None``.
+        permissions: View/change permissions (user and group IDs). ``None``
+            unless fetched with ``full_perms=True``.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -35,5 +38,6 @@ class Tag(BaseModel):
     document_count: int | None = None
     owner: int | None = None
     user_can_change: bool | None = None
+    permissions: SetPermissions | None = None
     parent: int | None = None
     children: list[int] | None = None

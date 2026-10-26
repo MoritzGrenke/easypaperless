@@ -114,8 +114,11 @@ class _ClientCore:
             results=[model_class.model_validate(item) for item in raw.items],
         )
 
-    async def _get_resource(self, resource: str, id: int, model_class: type[Any]) -> Any:
-        resp = await self._session.get(f"/{resource}/{id}/")
+    async def _get_resource(
+        self, resource: str, id: int, model_class: type[Any], *, full_perms: bool = False
+    ) -> Any:
+        params = {"full_perms": "true"} if full_perms else None
+        resp = await self._session.get(f"/{resource}/{id}/", params=params)
         return model_class.model_validate(resp.json())
 
     async def _create_resource(

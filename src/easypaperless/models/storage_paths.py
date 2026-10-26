@@ -5,6 +5,7 @@ from __future__ import annotations
 from pydantic import BaseModel, ConfigDict
 
 from easypaperless.models._base import MatchingAlgorithm
+from easypaperless.models.permissions import SetPermissions
 
 
 class StoragePath(BaseModel):
@@ -16,6 +17,8 @@ class StoragePath(BaseModel):
         path: Template string used to build the storage path, e.g.
             ``"{created_year}/{correspondent}/{title}"``.
         document_count: Number of documents using this storage path.
+        permissions: View/change permissions (user and group IDs). ``None``
+            unless fetched with ``full_perms=True``.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -30,3 +33,4 @@ class StoragePath(BaseModel):
     document_count: int | None = None
     owner: int | None = None
     user_can_change: bool | None = None
+    permissions: SetPermissions | None = None

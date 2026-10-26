@@ -147,7 +147,9 @@ class DocumentsResource:
             return bool(_DATETIME_STR_RE.match(value))
         return False
 
-    async def get(self, id: int, *, include_metadata: bool = False) -> Document:
+    async def get(
+        self, id: int, *, include_metadata: bool = False, full_perms: bool = False
+    ) -> Document:
         """Fetch a single document by its ID.
 
         Args:
@@ -155,6 +157,10 @@ class DocumentsResource:
             include_metadata: When ``True``, the extended file-level metadata
                 is fetched concurrently and attached to the document.
                 Default: ``False``.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``Document.permissions``. paperless-ngx
+                then omits ``user_can_change`` and ``is_shared_by_requester``
+                (both ``None`` on the model). Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.documents.Document` with the
@@ -164,16 +170,17 @@ class DocumentsResource:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
         """
-        logger.info("Getting document id=%d", id)
+        logger.info("Getting document id=%d full_perms=%s", id, full_perms)
+        params = {"full_perms": "true"} if full_perms else None
         if include_metadata:
             doc_resp, meta_resp = await asyncio.gather(
-                self._core._session.get(f"/documents/{id}/"),
+                self._core._session.get(f"/documents/{id}/", params=params),
                 self._core._session.get(f"/documents/{id}/metadata/"),
             )
             data = doc_resp.json()
             data["metadata"] = meta_resp.json()
         else:
-            resp = await self._core._session.get(f"/documents/{id}/")
+            resp = await self._core._session.get(f"/documents/{id}/", params=params)
             data = resp.json()
         return Document.model_validate(data)
 
@@ -234,6 +241,7 @@ class DocumentsResource:
         modified_before: date | datetime | str | None = None,
         modified_until: date | datetime | str | None = None,
         checksum: str | None = None,
+        full_perms: bool = False,
         page_size: int = 25,
         page: int | None = None,
         ordering: str | None = None,
@@ -325,6 +333,11 @@ class DocumentsResource:
                 it is the existing document's ID).  ``client.trash.list()``
                 shows the trashed document; ``client.trash.restore()`` brings
                 it back.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every document, available as
+                ``Document.permissions``. paperless-ngx then omits
+                ``user_can_change`` and ``is_shared_by_requester`` (both ``None``
+                on the model). Default: ``False``.
             page_size: Number of results per API page.  Default: ``25``.
             page: Return only this specific page (1-based).
             ordering: Field name to sort by.
@@ -482,6 +495,9 @@ class DocumentsResource:
 
         if checksum is not None:
             params["checksum__iexact"] = checksum
+
+        if full_perms:
+            params["full_perms"] = "true"
 
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
