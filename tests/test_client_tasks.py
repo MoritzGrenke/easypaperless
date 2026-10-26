@@ -15,7 +15,12 @@ import easypaperless.models as models
 import easypaperless.models.documents as documents_models
 import easypaperless.models.tasks as tasks_models
 from easypaperless import Document, PagedResult, Task, TaskStatus
-from easypaperless.exceptions import NotFoundError, TaskTimeoutError, UploadError
+from easypaperless.exceptions import (
+    BadRequestError,
+    NotFoundError,
+    TaskTimeoutError,
+    UploadError,
+)
 from easypaperless.resources import SyncTasksResource, TasksResource
 from tests._transport import FakePaperless
 
@@ -33,7 +38,7 @@ def task_json(**overrides: object) -> dict[str, object]:
         "task_file_name": "invoice.pdf",
         "date_created": "2026-10-20T10:00:00.123456+02:00",
         "date_done": "2026-10-20T10:00:09.654321+02:00",
-        "type": "file",
+        "type": "auto_task",
         "status": "SUCCESS",
         "result": "Success. New document id 42 created",
         "acknowledged": False,
@@ -91,7 +96,7 @@ async def test_list_sends_paperless_filter_parameters() -> None:
             task_id=TASK_UUID,
             status=TaskStatus.FAILURE,
             task_name="consume_file",
-            type="file",
+            type="auto_task",
             acknowledged=False,
         )
 
@@ -99,7 +104,7 @@ async def test_list_sends_paperless_filter_parameters() -> None:
         "task_id": TASK_UUID,
         "status": "FAILURE",
         "task_name": "consume_file",
-        "type": "file",
+        "type": "auto_task",
         "acknowledged": "false",
     }
 
@@ -139,12 +144,25 @@ async def test_list_accepts_paginated_envelope_and_follows_next_pages() -> None:
 
 FAST = 0.001  # poll_interval for tests: never sleep for real for long
 
-# Recorded-style paperless-ngx failure results (consumer messages, paperless-ngx 2.x).
-DUPLICATE_RESULT = "Not consuming invoice.pdf: It is a duplicate of Invoice 2026-10 (#12)."
-OCR_FAILURE_RESULT = (
-    "invoice.pdf: Error occurred while consuming document invoice.pdf: "
-    "Error while performing OCR: SubprocessOutputError"
+# Failure results as paperless-ngx 2.18.2 reports them (verified live, #0050).
+# Every result starts with "<task_file_name>: ".  A duplicate of a live document
+# carries that document's ID in related_document; a duplicate of a trashed one
+# carries None and the trash note.
+DUPLICATE_RESULT = (
+    "invoice.pdf: Not consuming invoice.pdf: It is a duplicate of Invoice 2026-10 (#12)."
 )
+DUPLICATE_OF_TRASHED_RESULT = (
+    "invoice.pdf: Not consuming invoice.pdf: It is a duplicate of Invoice 2026-10 (#12)."
+    " Note: existing document is in the trash."
+)
+OCR_FAILURE_RESULT = (
+    "invoice.pdf: Error occurred while consuming document invoice.pdf: InputFileError: "
+)
+
+
+def duplicate_failure() -> dict[str, object]:
+    """The FAILURE task of a duplicate upload; related_document is the existing doc."""
+    return task_json(status="FAILURE", result=DUPLICATE_RESULT, related_document="12")
 
 
 def pending(**overrides: object) -> dict[str, object]:
@@ -195,19 +213,30 @@ async def test_wait_raises_upload_error_carrying_unaltered_task(status: str) -> 
 
 async def test_duplicate_and_ocr_failure_are_distinguishable_by_task_result() -> None:
     results = {}
-    for name, message in [("duplicate", DUPLICATE_RESULT), ("ocr", OCR_FAILURE_RESULT)]:
-        failed = task_json(status="FAILURE", result=message, related_document=None)
+    cases = [
+        ("duplicate", DUPLICATE_RESULT, "12"),
+        ("duplicate_trashed", DUPLICATE_OF_TRASHED_RESULT, None),
+        ("ocr", OCR_FAILURE_RESULT, None),
+    ]
+    related = {}
+    for name, message, related_document in cases:
+        failed = task_json(status="FAILURE", result=message, related_document=related_document)
         fake = FakePaperless({TASKS_PATH: [failed]})
         async with fake.async_client() as client:
             with pytest.raises(UploadError) as exc_info:
                 await client.tasks.wait(TASK_UUID, poll_interval=FAST)
         assert exc_info.value.task is not None
         results[name] = exc_info.value.task.result
+        related[name] = exc_info.value.task.related_document
 
     assert results["duplicate"] == DUPLICATE_RESULT
-    assert "duplicate" in (results["duplicate"] or "").lower()
+    assert ": It is a duplicate of " in (results["duplicate"] or "")
+    assert related["duplicate"] == "12"  # the existing document
+    assert (results["duplicate_trashed"] or "").endswith("existing document is in the trash.")
+    assert related["duplicate_trashed"] is None
     assert results["ocr"] == OCR_FAILURE_RESULT
     assert "duplicate" not in (results["ocr"] or "").lower()
+    assert related["ocr"] is None
 
 
 async def test_wait_per_call_poll_timeout_raises_task_timeout_error_with_task_id() -> None:
@@ -296,14 +325,19 @@ async def test_upload_wait_true_returns_document_via_task(tmp_path: Path) -> Non
 async def test_upload_wait_true_duplicate_failure_carries_task(tmp_path: Path) -> None:
     pdf = tmp_path / "invoice.pdf"
     pdf.write_bytes(b"%PDF-1.4")
-    failed = task_json(status="FAILURE", result=DUPLICATE_RESULT, related_document=None)
-    fake = FakePaperless({UPLOAD_PATH: httpx.Response(200, json=TASK_UUID), TASKS_PATH: [failed]})
+    fake = FakePaperless(
+        {UPLOAD_PATH: httpx.Response(200, json=TASK_UUID), TASKS_PATH: [duplicate_failure()]}
+    )
     async with fake.async_client() as client:
         with pytest.raises(UploadError) as exc_info:
             await client.documents.upload(pdf, wait=True, poll_interval=FAST)
 
+    # A duplicate FAILURE names the existing document; it must not be fetched
+    # and returned as if the upload had created it.
     assert exc_info.value.task is not None
     assert exc_info.value.task.result == DUPLICATE_RESULT
+    assert exc_info.value.task.related_document == "12"
+    assert [r.url.path for r in fake.requests] == ["/api/documents/post_document/", "/api/tasks/"]
 
 
 async def test_upload_wait_true_timeout_carries_task_id(tmp_path: Path) -> None:
@@ -372,8 +406,7 @@ def test_sync_tasks_list_get_wait_acknowledge() -> None:
 
 
 def test_sync_tasks_wait_raises_with_task_and_task_id() -> None:
-    failed = task_json(status="FAILURE", result=DUPLICATE_RESULT, related_document=None)
-    fake = FakePaperless({TASKS_PATH: FakePaperless.seq([failed], [pending()])})
+    fake = FakePaperless({TASKS_PATH: FakePaperless.seq([duplicate_failure()], [pending()])})
     with fake.sync_client(poll_interval=FAST) as client:
         with pytest.raises(UploadError) as upload_err:
             client.tasks.wait(TASK_UUID)
@@ -412,8 +445,8 @@ def test_task_accepts_integer_related_document_and_ignores_unknown_fields() -> N
 
 
 def test_task_keeps_unknown_status_string_instead_of_raising() -> None:
-    task = Task.model_validate(task_json(status="RECEIVED"))
-    assert task.status == "RECEIVED"
+    task = Task.model_validate(task_json(status="SOMETHING_NEW"))
+    assert task.status == "SOMETHING_NEW"
     assert not isinstance(task.status, TaskStatus)
 
 
@@ -432,7 +465,7 @@ async def test_list_returns_tasks_with_unknown_status() -> None:
 
 async def test_wait_treats_unknown_status_as_not_finished() -> None:
     fake = FakePaperless(
-        {TASKS_PATH: FakePaperless.seq([pending(status="RECEIVED")], [task_json()])}
+        {TASKS_PATH: FakePaperless.seq([pending(status="SOMETHING_NEW")], [task_json()])}
     )
     async with fake.async_client() as client:
         task = await client.tasks.wait(TASK_UUID, poll_interval=FAST)
@@ -442,9 +475,38 @@ async def test_wait_treats_unknown_status_as_not_finished() -> None:
 
 
 async def test_wait_with_only_unknown_status_times_out() -> None:
-    fake = FakePaperless({TASKS_PATH: [pending(status="RECEIVED")]})
+    fake = FakePaperless({TASKS_PATH: [pending(status="SOMETHING_NEW")]})
     async with fake.async_client() as client:
         with pytest.raises(TaskTimeoutError) as exc_info:
             await client.tasks.wait(TASK_UUID, poll_interval=FAST, poll_timeout=0.05)
 
     assert exc_info.value.task_id == TASK_UUID
+
+
+def test_received_status_is_a_known_task_status() -> None:
+    # paperless-ngx accepts RECEIVED as a status filter value (verified live, #0050).
+    task = Task.model_validate(task_json(status="RECEIVED", date_done=None))
+    assert task.status is TaskStatus.RECEIVED
+
+
+async def test_wait_keeps_polling_a_received_task() -> None:
+    fake = FakePaperless(
+        {TASKS_PATH: FakePaperless.seq([pending(status="RECEIVED")], [task_json()])}
+    )
+    async with fake.async_client() as client:
+        task = await client.tasks.wait(TASK_UUID, poll_interval=FAST)
+
+    assert task.status == TaskStatus.SUCCESS
+    assert len(fake.requests) == 2
+
+
+async def test_list_with_invalid_enum_filter_raises_bad_request() -> None:
+    # status, task_name and type are case-sensitive enums in paperless-ngx.
+    body = {"type": ["Select a valid choice. file is not one of the available choices."]}
+    fake = FakePaperless({TASKS_PATH: httpx.Response(400, json=body)})
+    async with fake.async_client() as client:
+        with pytest.raises(BadRequestError) as exc_info:
+            await client.tasks.list(type="file")
+
+    assert exc_info.value.field_errors == body
+    assert fake.requests[0].url.params["type"] == "file"

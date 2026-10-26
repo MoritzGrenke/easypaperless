@@ -351,6 +351,9 @@ class PaperlessClient(_ClientCore):
         logger.info("Getting server version")
         url = f"{self._session.base_url}/"
         try:
+            # paperless-ngx redirects /api/ to its HTML schema view.  Keep the
+            # httpx default "Accept: */*": with "Accept: application/json" the
+            # redirect target answers 406 Not Acceptable (verified in #0050).
             resp = await self._session.get("/")
         except NotFoundError as exc:
             raise NotPaperlessError(
@@ -380,7 +383,10 @@ class PaperlessClient(_ClientCore):
 
         Raises:
             ~easypaperless.exceptions.PermissionDeniedError: The token's user
-                is not an administrator (403).
+                is not an administrator (403).  ``/api/status/`` requires a
+                staff or superuser account; paperless-ngx answers others with a
+                plain-text ``Insufficient permissions`` body, which becomes the
+                exception message.
             ~easypaperless.exceptions.AuthenticationError: The token was
                 refused (401).
 

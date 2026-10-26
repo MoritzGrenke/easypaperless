@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 
 import pytest
 
-from easypaperless import PaperlessClient
+from easypaperless import PagedResult, PaperlessClient
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -27,8 +27,6 @@ async def _first_doc(client: PaperlessClient):  # type: ignore[return]
 
 @pytest.mark.integration
 async def test_list_documents_returns_results(client: PaperlessClient) -> None:
-    from easypaperless.models.paged_result import PagedResult
-
     docs = await client.documents.list(page=1, page_size=5)
     assert isinstance(docs, PagedResult)
 
@@ -92,21 +90,21 @@ async def test_update_document_asn_None(client: PaperlessClient, temp_documents)
 @pytest.mark.integration
 async def test_search_mode_title_or_text(client: PaperlessClient) -> None:
     docs = await client.documents.list(search="a", search_mode="title_or_text", page=1, page_size=5)
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
 async def test_search_mode_title(client: PaperlessClient) -> None:
     docs = await client.documents.list(search="a", search_mode="title", page=1, page_size=5)
-    assert isinstance(docs, list)
-    for doc in docs:
+    assert isinstance(docs, PagedResult)
+    for doc in docs.results:
         assert "a" in doc.title.lower()
 
 
 @pytest.mark.integration
 async def test_search_mode_query(client: PaperlessClient) -> None:
     docs = await client.documents.list(search="*", search_mode="query", page=1, page_size=5)
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -114,7 +112,7 @@ async def test_search_mode_original_filename(client: PaperlessClient) -> None:
     docs = await client.documents.list(
         search="a", search_mode="original_filename", page=1, page_size=5
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 # ---------------------------------------------------------------------------
@@ -348,9 +346,9 @@ async def test_filter_exclude_storage_paths(client: PaperlessClient, uid: str) -
 @pytest.mark.integration
 async def test_filter_created_after_before(client: PaperlessClient) -> None:
     docs_after = await client.documents.list(created_after="1970-01-01", page=1, page_size=5)
-    assert isinstance(docs_after, list)
+    assert isinstance(docs_after, PagedResult)
     docs_before = await client.documents.list(created_before="2099-12-31", page=1, page_size=5)
-    assert isinstance(docs_before, list)
+    assert isinstance(docs_before, PagedResult)
 
 
 @pytest.mark.integration
@@ -361,7 +359,7 @@ async def test_filter_added_after_before_date(client: PaperlessClient) -> None:
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -372,7 +370,7 @@ async def test_filter_added_after_before_datetime(client: PaperlessClient) -> No
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -383,7 +381,7 @@ async def test_filter_added_from_until(client: PaperlessClient) -> None:
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -394,7 +392,7 @@ async def test_filter_modified_after_before(client: PaperlessClient) -> None:
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -405,7 +403,7 @@ async def test_filter_modified_from_until(client: PaperlessClient) -> None:
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -416,7 +414,7 @@ async def test_filter_added_after_iso_datetime_string(client: PaperlessClient) -
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -426,7 +424,7 @@ async def test_filter_added_before_iso_datetime_string(client: PaperlessClient) 
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -437,7 +435,7 @@ async def test_filter_modified_after_iso_datetime_string(client: PaperlessClient
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -447,7 +445,7 @@ async def test_filter_modified_before_iso_datetime_string(client: PaperlessClien
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -458,7 +456,7 @@ async def test_filter_added_from_until_iso_datetime_strings(client: PaperlessCli
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 @pytest.mark.integration
@@ -469,7 +467,7 @@ async def test_filter_modified_from_until_iso_datetime_strings(client: Paperless
         page=1,
         page_size=5,
     )
-    assert isinstance(docs, list)
+    assert isinstance(docs, PagedResult)
 
 
 # ---------------------------------------------------------------------------
@@ -482,8 +480,8 @@ async def test_ordering_ascending_vs_descending(client: PaperlessClient) -> None
     """Ascending and descending should return the same documents in opposite order."""
     asc = await client.documents.list(ordering="id", page=1, page_size=10)
     desc = await client.documents.list(ordering="id", descending=True, page=1, page_size=10)
-    asc_ids = [d.id for d in asc]
-    desc_ids = [d.id for d in desc]
+    asc_ids = [d.id for d in asc.results]
+    desc_ids = [d.id for d in desc.results]
     # Both pages may not cover exactly the same documents if there are >10 docs,
     # but the ascending result should equal the reverse of the descending page
     # when there are ≤10 docs total, or at minimum the ordering should differ.

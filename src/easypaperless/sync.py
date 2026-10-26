@@ -229,7 +229,10 @@ class SyncPaperlessClient(_SyncCore):
 
         Raises:
             ~easypaperless.exceptions.PermissionDeniedError: The token's user
-                is not an administrator (403).
+                is not an administrator (403).  ``/api/status/`` requires a
+                staff or superuser account; paperless-ngx answers others with a
+                plain-text ``Insufficient permissions`` body, which becomes the
+                exception message.
             ~easypaperless.exceptions.AuthenticationError: The token was
                 refused (401).
 

@@ -18,6 +18,7 @@ class TaskStatus(StrEnum):
     FAILURE = "FAILURE"
     RETRY = "RETRY"
     REVOKED = "REVOKED"
+    RECEIVED = "RECEIVED"
 
 
 class Task(BaseModel):
@@ -32,17 +33,23 @@ class Task(BaseModel):
             ``documents.upload(wait=False)``.
         task_name: Name of the task, e.g. ``"consume_file"``.
         task_file_name: Original file name submitted for processing.
-        type: Task type as reported by paperless-ngx (e.g. ``"file"``,
-            ``"auto_task"``, ``"scheduled_task"``).
+        type: Task type as reported by paperless-ngx: ``"auto_task"`` (e.g.
+            a document consumption), ``"scheduled_task"`` or ``"manual_task"``.
         status: Current task status as a :class:`TaskStatus` enum value.  A
             status this library does not know yet is kept as the plain string
             paperless-ngx sent (it compares equal to that string).
-        result: Result or error message exactly as paperless-ngx reports it,
-            e.g. ``"Success. New document id 42 created"`` or
-            ``"Not consuming x.pdf: It is a duplicate of y (#12)."``.
+        result: Result or error message exactly as paperless-ngx reports it.
+            Consumption failures start with ``"<task_file_name>: "``, e.g.
+            ``"Success. New document id 42 created"``,
+            ``"x.pdf: Not consuming x.pdf: It is a duplicate of y (#12)."``
+            (a duplicate of a trashed document ends in
+            ``" Note: existing document is in the trash."``) or
+            ``"x.pdf: Error occurred while consuming document x.pdf: ..."``.
         acknowledged: Whether the task was acknowledged (dismissed in the UI).
-        related_document: ID of the resulting document as a string on
-            success, ``None`` otherwise.
+        related_document: Document ID as a string, or ``None``.  On
+            ``SUCCESS`` it is the new document.  On a duplicate ``FAILURE`` it
+            is the *existing* document the upload duplicates (``None`` when
+            that document is in the trash).  ``None`` for other failures.
         date_created: When the task was created.
         date_done: When the task finished, ``None`` while it is running.
         owner: ID of the user owning the task, if any.

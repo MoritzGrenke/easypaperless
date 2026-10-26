@@ -99,6 +99,8 @@ class HttpSession:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
+                # No default "Accept: application/json": server_version() relies
+                # on GET /api/ -> HTML schema view, which would then answer 406.
                 headers={"Authorization": f"Token {self._api_token}"},
                 timeout=self._timeout,
                 follow_redirects=True,

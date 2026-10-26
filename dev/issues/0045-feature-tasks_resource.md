@@ -89,12 +89,14 @@ Task polling exists only as a private helper inside `documents.upload(wait=True)
 ## Assumptions
 The live instance was not reachable during implementation, so the spike was not run. The implementation rests on the following assumptions, taken from the previous polling code and the paperless-ngx docs/source. They should be verified against a live instance (e.g. in #0050):
 
+> **Verified in #0050** against paperless-ngx 2.18.2: response shape, filters, unknown task ID, acknowledge and task fields hold as described. Corrections: `type` takes `auto_task`, `scheduled_task` or `manual_task` (not `file`). `status`, `task_name` and `type` are case-sensitive enums, and an invalid value answers 400. `RECEIVED` is a valid status. A duplicate `FAILURE` carries the existing document's ID in `related_document` (`null` if that document is in the trash). The failure texts below were replaced by the live ones in the tests.
+
 - **Response shape:** `GET /api/tasks/` returns a plain JSON array (the old `_poll_task` read `resp.json()[0]`). `tasks.list()` wraps it into a `PagedResult` (`count = len(results)`, `next`/`previous` = `None`). A paginated envelope (`count`/`next`/`results`) is accepted defensively, and all of its pages are fetched.
 - **Filters:** query parameters `task_id`, `status`, `task_name`, `type`, `acknowledged` (booleans sent as `true`/`false`). No `page` / `page_size` parameters, since the endpoint is not paginated.
 - **Unknown task ID:** paperless answers `200 []` rather than 404. `tasks.get()` turns the empty result into `NotFoundError`. `tasks.wait()` keeps polling on an empty result, because a freshly uploaded task may not be listed yet.
 - **Acknowledge:** `POST /api/tasks/acknowledge/` with body `{"tasks": [<numeric ids>]}`, answered with `{"result": <count>}`. If `result` is missing, the method returns `len(task_ids)`.
 - **Task fields:** `id`, `task_id`, `task_name`, `task_file_name`, `type`, `status`, `result`, `acknowledged`, `related_document` (a string; an int is accepted and converted), `date_created`, `date_done`, `owner`. Unknown fields (e.g. `duplicate_documents`) are ignored.
-- **Failure results used in tests** (realistic paperless consumer messages, not recorded from the live instance): duplicate `"Not consuming invoice.pdf: It is a duplicate of Invoice 2026-10 (#12)."`; OCR failure `"invoice.pdf: Error occurred while consuming document invoice.pdf: Error while performing OCR: SubprocessOutputError"`.
+- **Failure results used in tests** (the live texts from #0050): duplicate `"invoice.pdf: Not consuming invoice.pdf: It is a duplicate of Invoice 2026-10 (#12)."` (`related_document="12"`); duplicate of a trashed document: the same text plus `" Note: existing document is in the trash."` (`related_document=None`); consumption failure `"invoice.pdf: Error occurred while consuming document invoice.pdf: InputFileError: "`.
 
 ## Implementation Notes
 - `tasks.wait()` uses `poll_interval` / `poll_timeout` rather than the `timeout` named in the acceptance criteria. This follows the binding naming decision shared with #0044 (see `dev/api-conventions.md`, "Timeout naming").

@@ -268,6 +268,7 @@ print(status.database.status, status.tasks.celery_status)
 ### `client.documents` — Documents
 
 * **list()** Search and filter documents by title, content, tags, dates, correspondent, and more. The workhorse of the wrapper.
+  `list(checksum="<md5>")` finds a document by the MD5 of its original file (case-insensitive exact match). Documents in the trash are **not** found, but paperless still rejects a re-upload of the same file as a duplicate: the upload's `UploadError` then has `err.task.result` ending in `"Note: existing document is in the trash."` and `err.task.related_document` set to `None`. Use `client.trash.list()` / `client.trash.restore()` to find or recover it.
 * **get()** Fetch a single document's data; optionally includes extended file metadata.
 * **get_metadata()** Retrieve file-level technical metadata (checksums, sizes, MIME types) for a specific document.
 * **update()** Partially update document fields like title, tags, or dates using PATCH semantics. Supports `UNSET` to distinguish "not provided" from explicit `None`.
@@ -333,7 +334,7 @@ task_id = await client.documents.upload(
 ### `client.users` — Users
 
 * **list() / get() / create() / update() / delete()** Full CRUD for Paperless-ngx user accounts. Supports filtering by username and paginated results.
-* Use `PaperlessPermission` (a typed `Literal` alias) for type-safe permission checks against `user.user_permissions` or `user.inherited_permissions`.
+* Use `PaperlessPermission` (a typed `Literal` alias of the app-labelled strings, e.g. `"documents.view_document"`) for type-safe checks against `user.inherited_permissions`. `user.user_permissions` and `group.permissions` use bare codenames (`"view_document"`), both on read and on write; paperless-ngx rejects the app-labelled form there.
 
 ### `client.groups` — Groups
 
@@ -358,8 +359,9 @@ try:
     task = await client.tasks.wait(task_id, poll_timeout=120)
     doc = await client.documents.get(int(task.related_document))
 except UploadError as err:
-    if err.task and "duplicate" in (err.task.result or "").lower():
-        ...                                               # "Not consuming scan.pdf: It is a duplicate of ..."
+    if err.task and ": It is a duplicate of " in (err.task.result or ""):
+        # "scan.pdf: Not consuming scan.pdf: It is a duplicate of Invoice (#12)."
+        existing_id = err.task.related_document          # "12", or None if #12 is in the trash
 except TaskTimeoutError as err:
     ...                                                   # still running: wait again later with err.task_id
 ```

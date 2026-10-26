@@ -41,15 +41,22 @@ class SyncTasksResource:
             task_id: Only the task with this Celery task ID (UUID string).
             status: Only tasks with this status, e.g. ``TaskStatus.FAILURE``
                 or ``"FAILURE"``.
-            task_name: Only tasks with this name, e.g. ``"consume_file"``.
-            type: Only tasks of this type, e.g. ``"file"``, ``"auto_task"``
-                or ``"scheduled_task"`` (values as paperless-ngx reports them).
+            task_name: Only tasks with this name: ``"consume_file"``,
+                ``"train_classifier"``, ``"check_sanity"`` or
+                ``"index_optimize"``.
+            type: Only tasks of this type: ``"auto_task"``,
+                ``"scheduled_task"`` or ``"manual_task"``.
             acknowledged: ``False`` for tasks not yet acknowledged (as shown
                 in the paperless-ngx UI), ``True`` for acknowledged ones.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
             :class:`~easypaperless.models.tasks.Task` objects.
+
+        Raises:
+            ~easypaperless.exceptions.BadRequestError: If ``status``,
+                ``task_name`` or ``type`` is not one of paperless-ngx's values.
+                These filters are case-sensitive (``"success"`` is rejected).
         """
         return cast(
             PagedResult[Task],

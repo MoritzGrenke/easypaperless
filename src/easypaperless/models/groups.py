@@ -14,9 +14,11 @@ class Group(BaseModel):
     Attributes:
         id: Unique group ID (set by the API).
         name: Group name.
-        permissions: Permission codename strings granted to the group
-            (e.g. ``"documents.view_document"``). See
-            :data:`~easypaperless.PaperlessPermission` for the known values.
+        permissions: Permission codenames granted to the group, without the
+            app label (e.g. ``"view_document"``), as paperless-ngx returns and
+            accepts them.  :data:`~easypaperless.PaperlessPermission` holds the
+            app-labelled form (``"documents.view_document"``); strip the
+            prefix (``perm.split(".", 1)[1]``) before sending one here.
     """
 
     model_config = ConfigDict(extra="ignore")

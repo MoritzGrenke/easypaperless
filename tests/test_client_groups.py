@@ -11,7 +11,7 @@ from easypaperless import Group, PagedResult
 from easypaperless.exceptions import NotFoundError
 from tests._transport import FakePaperless
 
-GROUP = {"id": 3, "name": "Accounting", "permissions": ["documents.view_document"]}
+GROUP = {"id": 3, "name": "Accounting", "permissions": ["view_document"]}
 PAGE = {"count": 1, "next": None, "previous": None, "results": [GROUP]}
 
 
@@ -22,9 +22,7 @@ async def test_list_returns_paged_result_of_groups_and_sends_name_filters() -> N
 
     assert isinstance(result, PagedResult)
     assert result.count == 1
-    assert result.results == [
-        Group(id=3, name="Accounting", permissions=["documents.view_document"])
-    ]
+    assert result.results == [Group(id=3, name="Accounting", permissions=["view_document"])]
     params = fake.requests[0].url.params
     assert params["name__icontains"] == "acc"
     assert params["name__iexact"] == "Accounting"
@@ -35,7 +33,7 @@ async def test_get_returns_group() -> None:
     async with fake.async_client() as client:
         group = await client.groups.get(3)
 
-    assert group == Group(id=3, name="Accounting", permissions=["documents.view_document"])
+    assert group == Group(id=3, name="Accounting", permissions=["view_document"])
 
 
 async def test_get_unknown_id_raises_not_found() -> None:
@@ -45,25 +43,42 @@ async def test_get_unknown_id_raises_not_found() -> None:
             await client.groups.get(999)
 
 
-async def test_create_posts_name_only_and_returns_group_with_id() -> None:
-    created = {"id": 7, "name": "Accounting", "permissions": []}
-    fake = FakePaperless({("POST", "/api/groups/"): httpx.Response(201, json=created)})
+def _create_group_like_paperless(request: httpx.Request) -> httpx.Response:
+    """POST /api/groups/ as paperless-ngx 2.18.2 answers it (verified live, #0050)."""
+    body = json.loads(request.content)
+    if "permissions" not in body:
+        return httpx.Response(400, json={"permissions": ["This field is required."]})
+    return httpx.Response(201, json={"id": 7, **body})
+
+
+async def test_create_without_permissions_sends_empty_list_and_returns_group() -> None:
+    # paperless-ngx rejects a group POST without "permissions" (400), so the
+    # client sends [] when the caller omits them.
+    fake = FakePaperless({("POST", "/api/groups/"): _create_group_like_paperless})
     async with fake.async_client() as client:
         group = await client.groups.create(name="Accounting")
 
-    assert group.id == 7
-    assert group.name == "Accounting"
-    assert json.loads(fake.requests[0].content) == {"name": "Accounting"}
+    assert group == Group(id=7, name="Accounting", permissions=[])
+    assert json.loads(fake.requests[0].content) == {"name": "Accounting", "permissions": []}
+
+
+def test_sync_create_without_permissions_sends_empty_list() -> None:
+    fake = FakePaperless({("POST", "/api/groups/"): _create_group_like_paperless})
+    with fake.sync_client() as client:
+        group = client.groups.create(name="Accounting")
+
+    assert group.permissions == []
+    assert json.loads(fake.requests[0].content) == {"name": "Accounting", "permissions": []}
 
 
 async def test_create_sends_permissions() -> None:
     fake = FakePaperless({("POST", "/api/groups/"): httpx.Response(201, json=GROUP)})
     async with fake.async_client() as client:
-        await client.groups.create(name="Accounting", permissions=["documents.view_document"])
+        await client.groups.create(name="Accounting", permissions=["view_document"])
 
     assert json.loads(fake.requests[0].content) == {
         "name": "Accounting",
-        "permissions": ["documents.view_document"],
+        "permissions": ["view_document"],
     }
 
 
@@ -115,7 +130,7 @@ def test_sync_client_provides_full_crud() -> None:
     with fake.sync_client() as client:
         listed = client.groups.list(name_exact="Accounting", page=1, page_size=10)
         fetched = client.groups.get(3)
-        created = client.groups.create(name="Accounting", permissions=["documents.view_document"])
+        created = client.groups.create(name="Accounting", permissions=["view_document"])
         updated = client.groups.update(3, name="New")
         deleted = client.groups.delete(3)
         with pytest.raises(NotFoundError):
@@ -123,7 +138,7 @@ def test_sync_client_provides_full_crud() -> None:
 
     assert listed.results[0].name == "Accounting"
     assert fetched.id == 3
-    assert created.permissions == ["documents.view_document"]
+    assert created.permissions == ["view_document"]
     assert updated.name == "New"
     assert deleted is None
     list_params = fake.requests[0].url.params
@@ -132,7 +147,7 @@ def test_sync_client_provides_full_crud() -> None:
     assert list_params["page_size"] == "10"
     assert json.loads(fake.requests[2].content) == {
         "name": "Accounting",
-        "permissions": ["documents.view_document"],
+        "permissions": ["view_document"],
     }
     assert json.loads(fake.requests[3].content) == {"name": "New"}
 
