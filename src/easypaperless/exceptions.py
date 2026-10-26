@@ -25,8 +25,8 @@ class PaperlessError(Exception):
 class AuthError(PaperlessError):
     """Raised on 401 or 403 responses.
 
-    Indicates that the API key is missing, invalid, or lacks permission for
-    the requested operation.
+    Indicates that the API token is missing or invalid, or that the
+    authenticated user lacks permission for the requested operation.
     """
 
 
@@ -45,18 +45,20 @@ class ServerError(PaperlessError):
 class UploadError(PaperlessError):
     """Raised when file submission or document processing fails.
 
-    Typically raised when paperless-ngx reports a ``FAILURE`` status on the
-    Celery task created by
-    :meth:`~easypaperless.client.PaperlessClient.upload_document`.
+    Raised by ``client.documents.upload()`` (with ``wait=True``, see
+    :meth:`~easypaperless.resources.DocumentsResource.upload`) when the
+    paperless-ngx processing task reports ``FAILURE`` or ``REVOKED``, or
+    succeeds without returning a document ID.
     """
 
 
 class TaskTimeoutError(PaperlessError):
     """Raised when upload polling exceeds the configured timeout.
 
-    Raised by :meth:`~easypaperless.client.PaperlessClient.upload_document`
-    (with ``wait=True``) when the document processing task does not reach a
-    terminal state within ``poll_timeout`` seconds.
+    Raised by ``client.documents.upload()`` (with ``wait=True``, see
+    :meth:`~easypaperless.resources.DocumentsResource.upload`) when the
+    document processing task does not reach a terminal state within
+    ``poll_timeout`` seconds.
     """
 
     def __init__(self, message: str) -> None:
