@@ -180,12 +180,15 @@ async def test_owner_and_permissions_in_one_patch_are_applied(
         updated = await client.documents.update(doc_id, owner=owner.id, set_permissions=perms)
         assert updated.owner == owner.id
 
-        # Document has no permissions field; read them back as paperless reports them.
-        resp = await client._session.get(f"/documents/{doc_id}/", params={"full_perms": "true"})
-        body = resp.json()
-        assert body["owner"] == owner.id
-        assert body["permissions"]["view"]["users"] == [grantee.id]
-        assert body["permissions"]["change"]["users"] == [grantee.id]
+        # Read them back through the public API (#0053).
+        read_back = await client.documents.get(doc_id, full_perms=True)
+        assert read_back.owner == owner.id
+        assert read_back.permissions == perms
+
+        listed = await client.documents.list(ids=[doc_id], full_perms=True)
+        assert [d.permissions for d in listed.results] == [perms]
+
+        assert (await client.documents.get(doc_id)).permissions is None
     finally:
         await client.documents.update(doc_id, owner=original_owner, set_permissions=None)
         await client.users.delete(grantee.id)

@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
-from easypaperless import PaperlessClient
+from easypaperless import PaperlessClient, PermissionSet, SetPermissions
 
 
 @pytest.mark.integration
@@ -95,3 +97,35 @@ async def test_custom_field_crud(client: PaperlessClient, uid: str) -> None:
         assert cf.id in ids
     finally:
         await client.custom_fields.delete(cf.id)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("resource", "extra"),
+    [
+        ("tags", {}),
+        ("correspondents", {}),
+        ("document_types", {}),
+        ("storage_paths", {"path": "integration/{created}"}),
+    ],
+)
+async def test_full_perms_reads_back_permissions(
+    client: PaperlessClient, uid: str, resource: str, extra: dict[str, Any]
+) -> None:
+    """#0053: permissions set on create are returned by get/list with full_perms=True."""
+    group = await client.groups.create(name=f"__integration_perms_{resource}_{uid}")
+    res = getattr(client, resource)
+    perms = SetPermissions(
+        view=PermissionSet(groups=[group.id]), change=PermissionSet(groups=[group.id])
+    )
+    obj = await res.create(name=f"__integration_perms_{uid}__", set_permissions=perms, **extra)
+    try:
+        assert (await res.get(obj.id, full_perms=True)).permissions == perms
+        listed = await res.list(name_exact=obj.name, full_perms=True)
+        assert [o.permissions for o in listed.results] == [perms]
+        plain = await res.get(obj.id)
+        assert plain.permissions is None
+        assert plain.user_can_change is True
+    finally:
+        await res.delete(obj.id)
+        await client.groups.delete(group.id)
