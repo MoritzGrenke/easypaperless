@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Injectable HTTP transport** (`PaperlessClient` / `SyncPaperlessClient`, #0043): New keyword-only `transport: httpx.AsyncBaseTransport | None = None` constructor parameter, passed to the internal `httpx.AsyncClient`. Use it with `httpx.MockTransport` for tests without global patching, or with a custom `httpx.AsyncHTTPTransport` (proxy, local address, TLS). Auth header, base URL, timeout, redirects and retries remain controlled by easypaperless. Using `SyncPaperlessClient` from a worker thread while another event loop runs in the main thread is now documented and tested.
+
+### Fixed
+
+- **Configured `timeout` is now applied to regular API requests** (#0043). Requests made without a per-call timeout previously passed `timeout=None` to httpx, which disabled the timeout entirely instead of using the client's configured `timeout` (default `30.0` s). Downloads were not affected.
+
+---
+
 ## [0.6.0] - 2026-04-10
 
 ### Added

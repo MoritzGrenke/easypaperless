@@ -138,6 +138,27 @@ with SyncPaperlessClient(url=url, api_token=api_token) as client:
 
 ```
 
+`SyncPaperlessClient` runs its own private event loop thread, so it can be used from a worker thread while another event loop (e.g. FastAPI/uvicorn) runs in the main thread. `close()` (or leaving the `with` block) stops and joins that thread and is safe to call twice. Do not call it directly from inside a running event loop (e.g. Jupyter) — use `PaperlessClient` there.
+
+### Testing with an injected transport
+
+Both clients accept a `transport` keyword (`httpx.AsyncBaseTransport`). It is handed to the internal `httpx.AsyncClient`, while easypaperless still controls the auth header, base URL, timeout and retries. This lets you test code that uses easypaperless with an `httpx.MockTransport`, without global patching:
+
+``` Python
+import httpx
+from easypaperless import SyncPaperlessClient
+
+def handler(request: httpx.Request) -> httpx.Response:
+    assert request.url.path == "/api/tags/"
+    return httpx.Response(200, json={"count": 0, "next": None, "previous": None, "results": []})
+
+with SyncPaperlessClient(url="http://paperless.test", api_token="t",
+                         transport=httpx.MockTransport(handler)) as client:
+    assert client.tags.list().count == 0
+```
+
+With `SyncPaperlessClient` the handler runs on the client's internal loop thread. A custom `httpx.AsyncHTTPTransport(proxy=..., local_address=..., verify=...)` works the same way.
+
 ## 📖 Functional Overview
 
 All functionality is accessed through resource attributes on the client (e.g. `client.documents`, `client.tags`). Both `PaperlessClient` (async) and `SyncPaperlessClient` (sync) expose the same resources and methods.
@@ -148,7 +169,7 @@ The `UNSET` sentinel (importable from `easypaperless`) allows you to distinguish
 
 ### Client
 
-* **PaperlessClient / SyncPaperlessClient** Token-based authentication. Configurable timeout, poll interval, and poll timeout for slow instances. Optional built-in retry-with-exponential-backoff for transient errors (`retry_attempts`, `retry_backoff`, `retry_on`); also accepts a pre-configured `tenacity.AsyncRetrying` instance for advanced retry strategies.
+* **PaperlessClient / SyncPaperlessClient** Token-based authentication. Configurable timeout, poll interval, and poll timeout for slow instances. Optional built-in retry-with-exponential-backoff for transient errors (`retry_attempts`, `retry_backoff`, `retry_on`); also accepts a pre-configured `tenacity.AsyncRetrying` instance for advanced retry strategies. Optional injectable `httpx` transport (`transport=`) for mock-based testing or custom proxy/TLS settings.
 
 ### `client.documents` — Documents
 

@@ -46,7 +46,7 @@
 | 0040 | Bug | Wrong Query Parameter Keys for Single-Value Filters in `documents.list()` | Deployed | [0040-bug-document_type_filter_ignored_in_list.md](0040-bug-document_type_filter_ignored_in_list.md) |
 | 0041 | Feature | Optional Retry-with-Backoff Support for Transient Network/Proxy Errors | Deployed | [0041-feature-retry_with_backoff_on_transient_errors.md](0041-feature-retry_with_backoff_on_transient_errors.md) |
 | 0042 | Feature | Document History (Audit Log) Endpoint | Deployed | [0042-feature-document_history_endpoint.md](0042-feature-document_history_endpoint.md) |
-| 0043 | Feature | Injectable HTTP Transport for PaperlessClient and SyncPaperlessClient | Open | [0043-feature-injectable_http_transport.md](0043-feature-injectable_http_transport.md) |
+| 0043 | Feature | Injectable HTTP Transport for PaperlessClient and SyncPaperlessClient | Implemented | [0043-feature-injectable_http_transport.md](0043-feature-injectable_http_transport.md) |
 | 0044 | Feature | Upload Documents from Bytes and Per-Call Upload Timeout | Open | [0044-feature-upload_document_from_bytes.md](0044-feature-upload_document_from_bytes.md) |
 | 0045 | Feature | Tasks Resource (list, get, wait, acknowledge) | Open | [0045-feature-tasks_resource.md](0045-feature-tasks_resource.md) |
 | 0046 | Feature | Classifiable Error Hierarchy (401 vs 403, 400 Field Errors, Transport vs 5xx) | Open | [0046-feature-classifiable_error_hierarchy.md](0046-feature-classifiable_error_hierarchy.md) |

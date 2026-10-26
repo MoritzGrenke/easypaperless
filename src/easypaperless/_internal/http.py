@@ -66,6 +66,7 @@ class HttpSession:
         retry_backoff: float = 1.0,
         retry_on: tuple[type[Exception], ...] | None = None,
         tenacity_retrying: Any = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         # Normalize: strip trailing slash, then append /api
         self._base_url = base_url.rstrip("/") + "/api"
@@ -78,6 +79,7 @@ class HttpSession:
             retry_on if retry_on is not None else _DEFAULT_RETRY_ON
         )
         self._tenacity_retrying = tenacity_retrying
+        self._transport = transport
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -86,6 +88,7 @@ class HttpSession:
                 headers={"Authorization": f"Token {self._api_token}"},
                 timeout=self._timeout,
                 follow_redirects=True,
+                transport=self._transport,
             )
         return self._client
 
@@ -136,7 +139,8 @@ class HttpSession:
                 json=json,
                 data=data,
                 files=files,
-                timeout=timeout,
+                # ``None`` means "no timeout" to httpx; fall back to the client default.
+                timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
             )
         except httpx.TimeoutException as exc:
             raise ServerError(
