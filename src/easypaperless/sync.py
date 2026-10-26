@@ -168,6 +168,12 @@ class SyncPaperlessClient(_SyncCore):
                 ``tenacity.Retrying`` is not compatible because all requests
                 run on an internal async event loop.
 
+                ``retry_attempts`` / ``tenacity_retrying`` never apply to
+                requests that create something: ``documents.upload()``, every
+                resource's ``create()`` and ``documents.notes.create()`` send
+                exactly one request and raise the error, because a retry after
+                a lost response could create a duplicate.
+
                 ``transport`` (``httpx.AsyncBaseTransport | None``): custom or
                 mock transport for the internal ``httpx.AsyncClient``; must be
                 an *async* transport.  An ``httpx.MockTransport`` works — its

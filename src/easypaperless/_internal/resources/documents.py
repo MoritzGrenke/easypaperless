@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Literal, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
-from easypaperless.exceptions import ServerResponseError, UploadError
+from easypaperless.exceptions import ServerResponseError, UploadError, ValidationError
 from easypaperless.models.documents import (
     AuditLogEntry,
     Document,
@@ -148,6 +148,7 @@ class NotesResource:
         resp = await self._core._session.post(
             f"/documents/{document_id}/notes/",
             json={"note": note},
+            retry=False,  # a retry after a lost response could add the note twice
         )
         data = resp.json()
         if isinstance(data, list):
@@ -769,8 +770,11 @@ class DocumentsResource:
 
     async def upload(
         self,
-        file: str | Path,
+        file: str | Path | bytes,
         *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        request_timeout: float | None = None,
         title: str | Unset = UNSET,
         created: date | str | None = None,
         correspondent: int | str | None | Unset = UNSET,
@@ -785,8 +789,28 @@ class DocumentsResource:
     ) -> str | Document:
         """Upload a document to paperless-ngx.
 
+        The upload request is never retried automatically, whatever the
+        client's ``retry_attempts`` / ``tenacity_retrying`` settings: if the
+        connection fails after paperless-ngx has accepted the file, a retry
+        would create a duplicate.  A failed upload raises (e.g.
+        :exc:`~easypaperless.exceptions.TransportTimeoutError`) so you can
+        decide whether to check for the document and upload again.
+
         Args:
-            file: Path to the file to upload.
+            file: Path to the file to upload (``str`` or :class:`~pathlib.Path`),
+                or the file content as ``bytes``.  Bytes are sent directly; no
+                temporary file is written.
+            filename: File name sent to paperless-ngx.  Required when *file* is
+                ``bytes`` (omitting it raises
+                :exc:`~easypaperless.exceptions.ValidationError` before any
+                request).  For a path, overrides the name taken from the path.
+            content_type: MIME type of the file part, sent as given (e.g.
+                ``"application/pdf"``).  When omitted, it is guessed from the
+                file name as before.
+            request_timeout: HTTP timeout in seconds for the upload request
+                only, overriding the client's ``timeout`` for this call.  Does
+                not affect task polling (see ``poll_timeout``).  When omitted,
+                the client's ``timeout`` applies.
             title: Title to assign to the document.
             created: Creation date as an ISO-8601 string (``"YYYY-MM-DD"``) or a
                 :class:`~datetime.date` object.
@@ -814,6 +838,8 @@ class DocumentsResource:
             when ``wait=True``.
 
         Raises:
+            ~easypaperless.exceptions.ValidationError: If *file* is ``bytes``
+                and no *filename* is given.
             ~easypaperless.exceptions.UploadError: If processing fails;
                 ``err.task`` holds the task with paperless-ngx's ``result``
                 unaltered (e.g. to recognise a duplicate).
@@ -821,9 +847,16 @@ class DocumentsResource:
                 resume with ``client.tasks.wait(err.task_id)``.
         """
         resolver = self._core._resolver
-        file_path = Path(file)
-        file_bytes = file_path.read_bytes()
-        logger.info("Uploading %r (%d bytes)", file_path.name, len(file_bytes))
+        if isinstance(file, bytes):
+            if not filename:
+                raise ValidationError("filename is required when uploading from bytes")
+            file_bytes = file
+            upload_name = filename
+        else:
+            file_path = Path(file)
+            file_bytes = file_path.read_bytes()
+            upload_name = filename if filename is not None else file_path.name
+        logger.info("Uploading %r (%d bytes)", upload_name, len(file_bytes))
 
         data: dict[str, Any] = {}
         if not isinstance(title, Unset):
@@ -844,8 +877,20 @@ class DocumentsResource:
         if custom_fields is not None:
             data["custom_fields"] = json.dumps(custom_fields)
 
-        files = {"document": (file_path.name, file_bytes)}
-        resp = await self._core._session.post("/documents/post_document/", data=data, files=files)
+        # Without content_type httpx derives it from the file name (previous behaviour).
+        document_part: tuple[str, bytes] | tuple[str, bytes, str] = (
+            (upload_name, file_bytes)
+            if content_type is None
+            else (upload_name, file_bytes, content_type)
+        )
+        files = {"document": document_part}
+        resp = await self._core._session.post(
+            "/documents/post_document/",
+            data=data,
+            files=files,
+            timeout=request_timeout,
+            retry=False,  # a retry after a lost response would upload a duplicate
+        )
         task_id: str = resp.text.strip('"')
         logger.debug("Upload accepted, task_id=%r", task_id)
 
