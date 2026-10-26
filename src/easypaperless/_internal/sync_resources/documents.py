@@ -504,8 +504,11 @@ class SyncDocumentsResource:
             when ``wait=True``.
 
         Raises:
-            ~easypaperless.exceptions.UploadError: If processing fails.
-            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded.
+            ~easypaperless.exceptions.UploadError: If processing fails;
+                ``err.task`` holds the task with paperless-ngx's ``result``
+                unaltered (e.g. to recognise a duplicate).
+            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded;
+                resume with ``client.tasks.wait(err.task_id)``.
         """
         return cast(
             str | Document,

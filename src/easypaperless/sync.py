@@ -18,6 +18,7 @@ from easypaperless._internal.sync_resources.documents import SyncDocumentsResour
 from easypaperless._internal.sync_resources.groups import SyncGroupsResource
 from easypaperless._internal.sync_resources.storage_paths import SyncStoragePathsResource
 from easypaperless._internal.sync_resources.tags import SyncTagsResource
+from easypaperless._internal.sync_resources.tasks import SyncTasksResource
 from easypaperless._internal.sync_resources.trash import SyncTrashResource
 from easypaperless._internal.sync_resources.users import SyncUsersResource
 from easypaperless.client import PaperlessClient
@@ -37,6 +38,7 @@ class _SyncCore:
     users: SyncUsersResource
     groups: SyncGroupsResource
     trash: SyncTrashResource
+    tasks: SyncTasksResource
 
     def __init__(self, url: str, api_token: str, **kwargs: Any) -> None:
         self._loop = asyncio.new_event_loop()
@@ -57,6 +59,7 @@ class _SyncCore:
         self.users = SyncUsersResource(self._async_client.users, self._run)
         self.groups = SyncGroupsResource(self._async_client.groups, self._run)
         self.trash = SyncTrashResource(self._async_client.trash, self._run)
+        self.tasks = SyncTasksResource(self._async_client.tasks, self._run)
 
     def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
         """Submit a coroutine to the background event loop and block until done."""
@@ -108,6 +111,8 @@ class SyncPaperlessClient(_SyncCore):
       see `easypaperless.resources.SyncUsersResource`
     * ``client.trash`` — list, restore, and permanently delete trashed documents -
       see `easypaperless.resources.SyncTrashResource`
+    * ``client.tasks`` — list, get, wait for, and acknowledge background tasks -
+      see `easypaperless.resources.SyncTasksResource`
 
     All methods are synchronous wrappers around the async
     :class:`~easypaperless.client.PaperlessClient`.  Operations run on a
