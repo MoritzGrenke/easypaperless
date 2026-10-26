@@ -25,6 +25,7 @@ from easypaperless._internal.resources.correspondents import CorrespondentsResou
 from easypaperless._internal.resources.custom_fields import CustomFieldsResource
 from easypaperless._internal.resources.document_types import DocumentTypesResource
 from easypaperless._internal.resources.documents import DocumentsResource, NotesResource
+from easypaperless._internal.resources.groups import GroupsResource
 from easypaperless._internal.resources.storage_paths import StoragePathsResource
 from easypaperless._internal.resources.tags import TagsResource
 from easypaperless._internal.resources.trash import TrashResource
@@ -36,6 +37,7 @@ from easypaperless._internal.sync_resources.documents import (
     SyncDocumentsResource,
     SyncNotesResource,
 )
+from easypaperless._internal.sync_resources.groups import SyncGroupsResource
 from easypaperless._internal.sync_resources.storage_paths import SyncStoragePathsResource
 from easypaperless._internal.sync_resources.tags import SyncTagsResource
 from easypaperless._internal.sync_resources.trash import SyncTrashResource
@@ -58,6 +60,8 @@ __all__ = [
     "SyncTagsResource",
     "UsersResource",
     "SyncUsersResource",
+    "GroupsResource",
+    "SyncGroupsResource",
     "TrashResource",
     "SyncTrashResource",
 ]
