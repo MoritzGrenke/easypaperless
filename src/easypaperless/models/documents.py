@@ -7,6 +7,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from easypaperless.models.permissions import SetPermissions
+
 # Task models live in models/tasks.py; re-exported here for backward compatibility.
 from easypaperless.models.tasks import Task as Task
 from easypaperless.models.tasks import TaskStatus as TaskStatus
@@ -197,6 +199,8 @@ class Document(BaseModel):
             ``None`` unless the document was fetched with
             ``include_metadata=True`` or retrieved via
             :meth:`~easypaperless._internal.resources.documents.DocumentsResource.get_metadata`.
+        permissions: View/change permissions (user and group IDs). ``None``
+            unless the document was fetched with ``full_perms=True``.
     """
 
     model_config = ConfigDict(extra="ignore", populate_by_name=True)
@@ -222,3 +226,4 @@ class Document(BaseModel):
     custom_fields: list[CustomFieldValue] = Field(default_factory=list)
     search_hit: SearchHit | None = Field(default=None, alias="__search_hit__")
     metadata: DocumentMetadata | None = None
+    permissions: SetPermissions | None = None

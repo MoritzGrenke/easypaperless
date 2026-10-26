@@ -33,6 +33,7 @@ class CorrespondentsResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[Correspondent]:
         """Return correspondents defined in paperless-ngx.
 
@@ -49,6 +50,10 @@ class CorrespondentsResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``Correspondent.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -68,16 +73,21 @@ class CorrespondentsResource:
             params["page_size"] = page_size
         if ordering is not None:
             params["ordering"] = f"-{ordering}" if descending else ordering
+        if full_perms:
+            params["full_perms"] = "true"
         return cast(
             PagedResult[Correspondent],
             await self._core._list_resource("correspondents", Correspondent, params or None),
         )
 
-    async def get(self, id: int) -> Correspondent:
+    async def get(self, id: int, *, full_perms: bool = False) -> Correspondent:
         """Fetch a single correspondent by its ID.
 
         Args:
             id: Numeric correspondent ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``Correspondent.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.correspondents.Correspondent` with the given ID.
@@ -87,7 +97,10 @@ class CorrespondentsResource:
         """
         logger.info("Getting correspondent id=%d", id)
         return cast(
-            Correspondent, await self._core._get_resource("correspondents", id, Correspondent)
+            Correspondent,
+            await self._core._get_resource(
+                "correspondents", id, Correspondent, full_perms=full_perms
+            ),
         )
 
     async def create(

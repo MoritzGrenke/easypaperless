@@ -7,6 +7,7 @@ from datetime import date
 from pydantic import BaseModel, ConfigDict
 
 from easypaperless.models._base import MatchingAlgorithm
+from easypaperless.models.permissions import SetPermissions
 
 
 class Correspondent(BaseModel):
@@ -18,6 +19,8 @@ class Correspondent(BaseModel):
         document_count: Number of documents assigned to this correspondent.
         last_correspondence: Date of the most recent document assigned here,
             or ``None``.
+        permissions: View/change permissions (user and group IDs). ``None``
+            unless fetched with ``full_perms=True``.
     """
 
     model_config = ConfigDict(extra="ignore")
@@ -32,3 +35,4 @@ class Correspondent(BaseModel):
     last_correspondence: date | None = None
     owner: int | None = None
     user_can_change: bool | None = None
+    permissions: SetPermissions | None = None
