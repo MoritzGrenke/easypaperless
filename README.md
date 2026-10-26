@@ -295,6 +295,10 @@ The `UNSET` sentinel (importable from `easypaperless`) allows you to distinguish
 * **list() / get() / create() / update() / delete()** Full CRUD for Paperless-ngx user accounts. Supports filtering by username and paginated results.
 * Use `PaperlessPermission` (a typed `Literal` alias) for type-safe permission checks against `user.user_permissions` or `user.inherited_permissions`.
 
+### `client.groups` — Groups
+
+* **list() / get() / create() / update() / delete()** Full CRUD for Paperless-ngx user groups. Supports filtering by name and paginated results. Use group IDs in `set_permissions` to grant object permissions to a whole group.
+
 ### `client.trash` — Trash
 
 * **list()** List all documents currently in the Paperless-ngx trash bin. Returns `PagedResult[Document]`.
