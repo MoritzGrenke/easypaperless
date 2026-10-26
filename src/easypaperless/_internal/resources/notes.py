@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from pydantic import ValidationError
+
 from easypaperless.exceptions import PaperlessError, ServerResponseError
 from easypaperless.models.documents import DocumentNote
 from easypaperless.models.paged_result import PagedResult
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _note_id(note: DocumentNote) -> int:
+def _note_sort_key(note: DocumentNote) -> int:
     """Sort key: note ID (paperless assigns ascending IDs), missing IDs first."""
     return note.id if note.id is not None else -1
 
@@ -25,7 +27,9 @@ class NotesResource:
 
     def __init__(self, core: _ClientCore) -> None:
         self._core = core
+        # Token user's ID; ``None`` = not looked up yet or lookup failed.
         self._user_id: int | None = None
+        self._user_lookup_done = False
 
     async def list(
         self,
@@ -89,8 +93,15 @@ class NotesResource:
         same document at the same moment is not returned by mistake.  Only if
         that text occurs more than once does the client look up the token's
         user once (``GET /api/ui_settings/``, cached per client) and keep only
-        that user's notes (all of them if the lookup fails); of the remaining
-        notes the newest (highest ID) is returned.
+        that user's notes; of the remaining notes the newest (highest ID) is
+        returned.
+
+        Telling identical texts of different users apart needs the
+        ``view_uisettings`` permission (or a superuser), because that lookup
+        uses ``/api/ui_settings/``.  Without it the lookup fails (403), the
+        failure is cached per client and logged as a warning, no error is
+        raised (the note already exists), and the newest note with that text
+        is returned, which may belong to another user.
 
         Ambiguous case: if the token's user already has a note with the same
         text on the document, or creates one concurrently, the notes cannot be
@@ -138,20 +149,29 @@ class NotesResource:
             candidates = notes
         elif len(candidates) > 1:
             user_id = await self._current_user_id()
-            candidates = [n for n in candidates if n.user == user_id] or candidates
-        return max(candidates, key=_note_id)
+            if user_id is None:
+                logger.warning(
+                    "Several notes with the same text on document id=%d and the current "
+                    "user is unknown (needs view_uisettings); returning the newest one",
+                    document_id,
+                )
+            else:
+                candidates = [n for n in candidates if n.user == user_id] or candidates
+        return max(candidates, key=_note_sort_key)
 
     async def _current_user_id(self) -> int | None:
-        """ID of the token's user from ``GET /ui_settings/``, cached per client."""
-        if self._user_id is None:
+        """ID of the token's user, or ``None`` if the lookup failed (cached per client)."""
+        if not self._user_lookup_done:
+            self._user_lookup_done = True
             try:
-                resp = await self._core._session.get("/ui_settings/")
-            except PaperlessError as exc:
+                self._user_id = (await self._core._get_ui_settings()).user.id
+            except (PaperlessError, ValidationError) as exc:
                 # The note already exists; do not turn a failed lookup into an error.
-                logger.warning("Could not look up the current user: %s", exc)
-                return None
-            user = resp.json().get("user") or {}
-            self._user_id = user.get("id")
+                logger.warning(
+                    "Could not look up the current user via /ui_settings/ "
+                    "(needs view_uisettings): %s",
+                    exc,
+                )
         return self._user_id
 
     async def delete(self, document_id: int, note_id: int) -> None:

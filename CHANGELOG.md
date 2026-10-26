@@ -12,7 +12,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
-- **`documents.notes.create()` returns the note it created** (#0054): paperless-ngx answers with the document's full note list; the client used to return the last entry, which under concurrent writes could be another user's note. It now picks the newest note with the sent text, and only if that text occurs several times looks up the token's user once (`GET /api/ui_settings/`) to keep that user's notes. If the same user has identical notes on the document, the newest is returned (documented ambiguity). Async and sync.
+- **`documents.notes.create()` returns the note it created** (#0054): paperless-ngx answers with the document's full note list; the client used to return the last entry, which under concurrent writes could be another user's note. It now picks the newest note with the sent text, and only if that text occurs several times looks up the token's user once (`GET /api/ui_settings/`) to keep that user's notes. If the same user has identical notes on the document, the newest is returned (documented ambiguity). Telling identical texts of different users apart needs the `view_uisettings` permission (or a superuser): without it the lookup fails with 403, is not retried for the rest of the client's lifetime, no error is raised (the note already exists), a warning is logged, and the newest note with that text is returned. Async and sync.
 
 ## [0.7.0] - 2026-10-26
 

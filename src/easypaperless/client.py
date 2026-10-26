@@ -115,6 +115,11 @@ class _ClientCore:
             results=[model_class.model_validate(item) for item in raw.items],
         )
 
+    async def _get_ui_settings(self) -> UiSettings:
+        """Fetch ``GET /ui_settings/`` (shared by :meth:`ui_settings` and notes)."""
+        resp = await self._session.get("/ui_settings/")
+        return UiSettings.model_validate(resp.json())
+
     async def _get_resource(
         self, resource: str, id: int, model_class: type[Any], *, full_perms: bool = False
     ) -> Any:
@@ -436,5 +441,4 @@ class PaperlessClient(_ClientCore):
             {'add_note'}
         """
         logger.info("Getting UI settings (current user and permissions)")
-        resp = await self._session.get("/ui_settings/")
-        return UiSettings.model_validate(resp.json())
+        return await self._get_ui_settings()

@@ -139,3 +139,40 @@ def test_sync_client_identifies_own_note_and_looks_up_the_user_once() -> None:
     assert [(n.id, n.user) for n in (first, second, third)] == [(4, 3), (9, 3), (10, 3)]
     ui_calls = [r for r in fake.requests if r.url.path == UI_SETTINGS_PATH]
     assert len(ui_calls) == 1
+
+
+async def test_failed_user_lookup_does_not_filter_for_notes_without_user(caplog: Any) -> None:
+    # Unknown user ID must not be compared with ``user is None`` notes: no user
+    # filter at all, the newest note with the text wins, and a warning is logged.
+    fake = FakePaperless(
+        {
+            ("POST", NOTES_PATH): [
+                _note(4, "ok", ME),
+                {"id": 5, "note": "ok", "created": None, "user": None},
+                _note(6, "ok", OTHER),
+            ],
+            ("GET", UI_SETTINGS_PATH): httpx.Response(403, json={"detail": "nope"}),
+        }
+    )
+    async with fake.async_client() as client:
+        with caplog.at_level("WARNING", logger="easypaperless"):
+            note = await client.documents.notes.create(14, note="ok")
+    assert (note.id, note.note) == (6, "ok")
+    assert any(
+        r.levelname == "WARNING" and "view_uisettings" in r.getMessage() for r in caplog.records
+    )
+
+
+async def test_failed_user_lookup_is_cached_per_client() -> None:
+    fake = FakePaperless(
+        {
+            ("POST", NOTES_PATH): [_note(4, "ok", ME), _note(5, "ok", OTHER)],
+            ("GET", UI_SETTINGS_PATH): httpx.Response(403, json={"detail": "nope"}),
+        }
+    )
+    async with fake.async_client() as client:
+        await client.documents.notes.create(14, note="ok")
+        second = await client.documents.notes.create(14, note="ok")
+    assert second.id == 5
+    ui_calls = [r for r in fake.requests if r.url.path == UI_SETTINGS_PATH]
+    assert len(ui_calls) == 1

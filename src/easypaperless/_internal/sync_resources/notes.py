@@ -61,8 +61,15 @@ class SyncNotesResource:
         same document at the same moment is not returned by mistake.  Only if
         that text occurs more than once does the client look up the token's
         user once (``GET /api/ui_settings/``, cached per client) and keep only
-        that user's notes (all of them if the lookup fails); of the remaining
-        notes the newest (highest ID) is returned.
+        that user's notes; of the remaining notes the newest (highest ID) is
+        returned.
+
+        Telling identical texts of different users apart needs the
+        ``view_uisettings`` permission (or a superuser), because that lookup
+        uses ``/api/ui_settings/``.  Without it the lookup fails (403), the
+        failure is cached per client and logged as a warning, no error is
+        raised (the note already exists), and the newest note with that text
+        is returned, which may belong to another user.
 
         Ambiguous case: if the token's user already has a note with the same
         text on the document, or creates one concurrently, the notes cannot be
