@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] - Unreleased
+
+### Added
+
+- **Current user and effective permissions** (`client.ui_settings()`, #0055): sends one authenticated `GET /api/ui_settings/` and returns the new `UiSettings` model: `user` (`id`, `username`, `is_staff`, `is_superuser`, `groups`), `permissions` (the user's effective permission codenames exactly as paperless returns them, bare such as `"add_document"`, including permissions granted via groups) and `settings` (`version`, `app_title`, `app_logo`, `trash_delay`, `auditlog_enabled`, `email_enabled`, `update_checking`; all optional, unknown fields ignored). Helpers `has_permission(codename)` and `missing_permissions(required) -> set[str]` name the permissions a user lacks (always none for a superuser). The endpoint requires the `view_uisettings` permission; without it paperless answers 403 (`PermissionDeniedError`). Available on `PaperlessClient` and `SyncPaperlessClient`; `UiSettings`, `UiSettingsUser` and `UiSettingsServerSettings` are exported from `easypaperless`. README has a new "Checking the service user's permissions" example.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added
