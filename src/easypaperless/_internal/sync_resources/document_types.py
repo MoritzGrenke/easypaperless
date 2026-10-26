@@ -31,6 +31,7 @@ class SyncDocumentTypesResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[DocumentType]:
         """Return document types defined in paperless-ngx.
 
@@ -47,6 +48,10 @@ class SyncDocumentTypesResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``DocumentType.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -63,15 +68,19 @@ class SyncDocumentTypesResource:
                     page_size=page_size,
                     ordering=ordering,
                     descending=descending,
+                    full_perms=full_perms,
                 )
             ),
         )
 
-    def get(self, id: int) -> DocumentType:
+    def get(self, id: int, *, full_perms: bool = False) -> DocumentType:
         """Fetch a single document type by its ID.
 
         Args:
             id: Numeric document-type ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``DocumentType.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.document_types.DocumentType` with the given ID.
@@ -79,7 +88,9 @@ class SyncDocumentTypesResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document type exists with that ID.
         """
-        return cast(DocumentType, self._run(self._async_document_types.get(id)))
+        return cast(
+            DocumentType, self._run(self._async_document_types.get(id, full_perms=full_perms))
+        )
 
     def create(
         self,

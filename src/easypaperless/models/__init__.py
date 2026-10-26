@@ -28,6 +28,11 @@ from easypaperless.models.system_status import (
     SystemStatusTasks,
 )
 from easypaperless.models.tags import Tag
+from easypaperless.models.ui_settings import (
+    UiSettings,
+    UiSettingsServerSettings,
+    UiSettingsUser,
+)
 from easypaperless.models.users import PaperlessPermission, User
 
 __all__ = [
@@ -57,6 +62,9 @@ __all__ = [
     "Tag",
     "Task",
     "TaskStatus",
+    "UiSettings",
+    "UiSettingsServerSettings",
+    "UiSettingsUser",
     "User",
     "PaperlessPermission",
 ]

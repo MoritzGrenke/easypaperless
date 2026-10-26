@@ -50,15 +50,15 @@ A service that uses easypaperless with a dedicated service user (e.g. the ThruCa
 ---
 
 ## Acceptance Criteria
-- [ ] `client.ui_settings()` sends one authenticated `GET /api/ui_settings/` and returns a `UiSettings` whose `user`, `permissions` and `settings` match the response.
-- [ ] `permissions` contains the codenames exactly as paperless returns them (bare, e.g. `"add_document"`).
-- [ ] `missing_permissions({"add_document", "add_note"})` returns `{"add_note"}` for a user who has only `add_document`.
-- [ ] `missing_permissions(...)` returns an empty set for a superuser, and `has_permission(...)` returns `True` for any codename.
-- [ ] Unknown extra fields in the response (top level, `user`, `settings`) do not cause errors.
-- [ ] A refused token raises `AuthenticationError`; a transport failure raises `TransportError`.
-- [ ] On a live instance, for a non-admin user with one permission granted directly and one only via a group, both appear in `permissions` (or, if paperless does not include group permissions, this is documented and `missing_permissions()` accounts for it).
-- [ ] The token never appears in reprs, exceptions or logs of the new call (covered by the #0047 test pattern).
-- [ ] The sync client offers the identical API.
+- [x] `client.ui_settings()` sends one authenticated `GET /api/ui_settings/` and returns a `UiSettings` whose `user`, `permissions` and `settings` match the response.
+- [x] `permissions` contains the codenames exactly as paperless returns them (bare, e.g. `"add_document"`).
+- [x] `missing_permissions({"add_document", "add_note"})` returns `{"add_note"}` for a user who has only `add_document`.
+- [x] `missing_permissions(...)` returns an empty set for a superuser, and `has_permission(...)` returns `True` for any codename.
+- [x] Unknown extra fields in the response (top level, `user`, `settings`) do not cause errors.
+- [x] A refused token raises `AuthenticationError`; a transport failure raises `TransportError`.
+- [x] On a live instance, for a non-admin user with one permission granted directly and one only via a group, both appear in `permissions` (or, if paperless does not include group permissions, this is documented and `missing_permissions()` accounts for it).
+- [x] The token never appears in reprs, exceptions or logs of the new call (covered by the #0047 test pattern).
+- [x] The sync client offers the identical API.
 - [ ] Released as 0.7.1 on PyPI.
 
 ---

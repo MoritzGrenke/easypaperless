@@ -53,6 +53,9 @@ from easypaperless.models import (
     Tag,
     Task,
     TaskStatus,
+    UiSettings,
+    UiSettingsServerSettings,
+    UiSettingsUser,
     User,
 )
 from easypaperless.sync import SyncPaperlessClient
@@ -94,6 +97,9 @@ __all__ = [
     "Tag",
     "Task",
     "TaskStatus",
+    "UiSettings",
+    "UiSettingsServerSettings",
+    "UiSettingsUser",
     "User",
     "PaperlessPermission",
     # Exceptions

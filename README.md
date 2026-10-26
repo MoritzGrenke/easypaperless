@@ -265,6 +265,30 @@ status = await client.system_status()
 print(status.database.status, status.tasks.celery_status)
 ```
 
+#### Checking the service user's permissions
+
+paperless-ngx's 403 responses never say which permission is missing. **ui_settings()** (`GET /api/ui_settings/`) returns a `UiSettings` model with the token's `user` (`id`, `username`, `is_staff`, `is_superuser`, `groups`), its effective `permissions` (bare codenames such as `"add_document"`, including permissions granted via groups) and some server `settings` (`version`, `app_title`, `trash_delay`, ...). `missing_permissions(required)` names the codenames the user lacks (always empty for a superuser); `has_permission(codename)` checks a single one.
+
+The endpoint itself needs the `view_uisettings` permission (directly or via a group); without it `ui_settings()` raises `PermissionDeniedError`. Grant it to service users you want to check.
+
+```python
+from easypaperless import PermissionDeniedError
+
+DELIVERY_PERMISSIONS = {
+    "add_document", "view_document", "change_document",
+    "add_note", "delete_note", "view_user", "view_paperlesstask",
+}
+
+try:
+    settings = await client.ui_settings()
+except PermissionDeniedError:
+    print("service user lacks view_uisettings, cannot check its permissions")
+else:
+    missing = settings.missing_permissions(DELIVERY_PERMISSIONS)
+    if missing:
+        print(f"user {settings.user.username!r} is missing: {', '.join(sorted(missing))}")
+```
+
 ### `client.documents` — Documents
 
 * **list()** Search and filter documents by title, content, tags, dates, correspondent, and more. The workhorse of the wrapper.
@@ -326,6 +350,24 @@ task_id = await client.documents.upload(
 * **list() / get() / create() / update() / delete()** Full CRUD for the physical directory structure where files are stored.
 * **bulk_delete()** Batch delete storage paths.
 * **bulk_set_permissions()** Batch update access control and ownership for storage paths.
+
+### Reading Object Permissions (`full_perms`)
+
+`get()` and `list()` of `documents`, `tags`, `correspondents`, `document_types` and `storage_paths` accept `full_perms=True`. The view/change users and groups (IDs) are then available as `.permissions`, a `SetPermissions` model with the same shape you pass to `set_permissions`. Without `full_perms` the field is `None`. Note that with `full_perms=True` paperless-ngx leaves out `user_can_change` (and for documents `is_shared_by_requester`), so those fields are `None`.
+
+```python
+from easypaperless import PermissionSet, SetPermissions
+
+perms = SetPermissions(view=PermissionSet(users=[7]), change=PermissionSet(users=[7]))
+await client.documents.update(42, owner=3, set_permissions=perms)
+
+doc = await client.documents.get(42, full_perms=True)
+assert doc.owner == 3 and doc.permissions == perms
+
+tags = await client.tags.list(full_perms=True)
+for tag in tags.results:
+    print(tag.name, tag.owner, tag.permissions.view.groups)
+```
 
 ### `client.custom_fields` — Custom Fields
 

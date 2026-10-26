@@ -62,7 +62,7 @@ class SyncDocumentsResource:
             self._run(self._async_documents.history(document_id, page=page, page_size=page_size)),
         )
 
-    def get(self, id: int, *, include_metadata: bool = False) -> Document:
+    def get(self, id: int, *, include_metadata: bool = False, full_perms: bool = False) -> Document:
         """Fetch a single document by its ID.
 
         Args:
@@ -70,6 +70,10 @@ class SyncDocumentsResource:
             include_metadata: When ``True``, the extended file-level metadata
                 is fetched concurrently and attached to the document.
                 Default: ``False``.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``Document.permissions``. paperless-ngx
+                then omits ``user_can_change`` and ``is_shared_by_requester``
+                (both ``None`` on the model). Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.documents.Document` with the
@@ -80,7 +84,12 @@ class SyncDocumentsResource:
                 with that ID.
         """
         return cast(
-            Document, self._run(self._async_documents.get(id, include_metadata=include_metadata))
+            Document,
+            self._run(
+                self._async_documents.get(
+                    id, include_metadata=include_metadata, full_perms=full_perms
+                )
+            ),
         )
 
     def get_metadata(self, id: int) -> DocumentMetadata:
@@ -138,6 +147,7 @@ class SyncDocumentsResource:
         modified_before: date | datetime | str | None = None,
         modified_until: date | datetime | str | None = None,
         checksum: str | None = None,
+        full_perms: bool = False,
         page_size: int = 25,
         page: int | None = None,
         ordering: str | None = None,
@@ -229,6 +239,11 @@ class SyncDocumentsResource:
                 it is the existing document's ID).  ``client.trash.list()``
                 shows the trashed document; ``client.trash.restore()`` brings
                 it back.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every document, available as
+                ``Document.permissions``. paperless-ngx then omits
+                ``user_can_change`` and ``is_shared_by_requester`` (both ``None``
+                on the model). Default: ``False``.
             page_size: Number of results per API page.  Default: ``25``.
             page: Return only this specific page (1-based).
             ordering: Field name to sort by.
@@ -281,6 +296,7 @@ class SyncDocumentsResource:
                     modified_before=modified_before,
                     modified_until=modified_until,
                     checksum=checksum,
+                    full_perms=full_perms,
                     page_size=page_size,
                     page=page,
                     ordering=ordering,

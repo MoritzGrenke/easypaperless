@@ -33,6 +33,7 @@ class TagsResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[Tag]:
         """Return tags defined in paperless-ngx.
 
@@ -49,6 +50,10 @@ class TagsResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``Tag.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -70,14 +75,17 @@ class TagsResource:
             params["ordering"] = f"-{ordering}" if descending else ordering
         return cast(
             PagedResult[Tag],
-            await self._core._list_resource("tags", Tag, params or None),
+            await self._core._list_resource("tags", Tag, params or None, full_perms=full_perms),
         )
 
-    async def get(self, id: int) -> Tag:
+    async def get(self, id: int, *, full_perms: bool = False) -> Tag:
         """Fetch a single tag by its ID.
 
         Args:
             id: Numeric tag ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``Tag.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.tags.Tag` with the given ID.
@@ -86,8 +94,8 @@ class TagsResource:
             ~easypaperless.exceptions.NotFoundError: If no tag exists with
                 that ID.
         """
-        logger.info("Getting tag id=%d", id)
-        return cast(Tag, await self._core._get_resource("tags", id, Tag))
+        logger.info("Getting tag id=%d full_perms=%s", id, full_perms)
+        return cast(Tag, await self._core._get_resource("tags", id, Tag, full_perms=full_perms))
 
     async def create(
         self,

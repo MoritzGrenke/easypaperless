@@ -31,6 +31,7 @@ class SyncTagsResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[Tag]:
         """Return tags defined in paperless-ngx.
 
@@ -47,6 +48,10 @@ class SyncTagsResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``Tag.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -63,15 +68,19 @@ class SyncTagsResource:
                     page_size=page_size,
                     ordering=ordering,
                     descending=descending,
+                    full_perms=full_perms,
                 )
             ),
         )
 
-    def get(self, id: int) -> Tag:
+    def get(self, id: int, *, full_perms: bool = False) -> Tag:
         """Fetch a single tag by its ID.
 
         Args:
             id: Numeric tag ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``Tag.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.tags.Tag` with the given ID.
@@ -80,7 +89,7 @@ class SyncTagsResource:
             ~easypaperless.exceptions.NotFoundError: If no tag exists with
                 that ID.
         """
-        return cast(Tag, self._run(self._async_tags.get(id)))
+        return cast(Tag, self._run(self._async_tags.get(id, full_perms=full_perms)))
 
     def create(
         self,

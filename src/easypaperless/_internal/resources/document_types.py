@@ -33,6 +33,7 @@ class DocumentTypesResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[DocumentType]:
         """Return document types defined in paperless-ngx.
 
@@ -49,6 +50,10 @@ class DocumentTypesResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``DocumentType.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -70,14 +75,19 @@ class DocumentTypesResource:
             params["ordering"] = f"-{ordering}" if descending else ordering
         return cast(
             PagedResult[DocumentType],
-            await self._core._list_resource("document_types", DocumentType, params or None),
+            await self._core._list_resource(
+                "document_types", DocumentType, params or None, full_perms=full_perms
+            ),
         )
 
-    async def get(self, id: int) -> DocumentType:
+    async def get(self, id: int, *, full_perms: bool = False) -> DocumentType:
         """Fetch a single document type by its ID.
 
         Args:
             id: Numeric document-type ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``DocumentType.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.document_types.DocumentType` with the given ID.
@@ -85,9 +95,12 @@ class DocumentTypesResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document type exists with that ID.
         """
-        logger.info("Getting document type id=%d", id)
+        logger.info("Getting document type id=%d full_perms=%s", id, full_perms)
         return cast(
-            DocumentType, await self._core._get_resource("document_types", id, DocumentType)
+            DocumentType,
+            await self._core._get_resource(
+                "document_types", id, DocumentType, full_perms=full_perms
+            ),
         )
 
     async def create(

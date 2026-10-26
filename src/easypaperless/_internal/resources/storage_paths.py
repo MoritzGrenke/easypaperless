@@ -35,6 +35,7 @@ class StoragePathsResource:
         page_size: int | None = None,
         ordering: str | None = None,
         descending: bool = False,
+        full_perms: bool = False,
     ) -> PagedResult[StoragePath]:
         """Return storage paths defined in paperless-ngx.
 
@@ -53,6 +54,10 @@ class StoragePathsResource:
             page_size: Number of results per page.
             ordering: Field to sort by.
             descending: When ``True``, reverses the sort direction.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions of every object, available as
+                ``StoragePath.permissions``; ``user_can_change`` is then ``None``.
+                Default: ``False``.
 
         Returns:
             :class:`~easypaperless.models.paged_result.PagedResult` of
@@ -78,14 +83,19 @@ class StoragePathsResource:
             params["ordering"] = f"-{ordering}" if descending else ordering
         return cast(
             PagedResult[StoragePath],
-            await self._core._list_resource("storage_paths", StoragePath, params or None),
+            await self._core._list_resource(
+                "storage_paths", StoragePath, params or None, full_perms=full_perms
+            ),
         )
 
-    async def get(self, id: int) -> StoragePath:
+    async def get(self, id: int, *, full_perms: bool = False) -> StoragePath:
         """Fetch a single storage path by its ID.
 
         Args:
             id: Numeric storage-path ID.
+            full_perms: When ``True``, paperless-ngx returns the full view/change
+                permissions, available as ``StoragePath.permissions``;
+                ``user_can_change`` is then ``None``. Default: ``False``.
 
         Returns:
             The :class:`~easypaperless.models.storage_paths.StoragePath` with the given ID.
@@ -93,8 +103,11 @@ class StoragePathsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no storage path exists with that ID.
         """
-        logger.info("Getting storage path id=%d", id)
-        return cast(StoragePath, await self._core._get_resource("storage_paths", id, StoragePath))
+        logger.info("Getting storage path id=%d full_perms=%s", id, full_perms)
+        return cast(
+            StoragePath,
+            await self._core._get_resource("storage_paths", id, StoragePath, full_perms=full_perms),
+        )
 
     async def create(
         self,

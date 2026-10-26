@@ -55,6 +55,30 @@ class SyncNotesResource:
     def create(self, document_id: int, *, note: str) -> DocumentNote:
         """Create a new note on a document.
 
+        paperless-ngx answers with the document's full note list, not with
+        the new note alone.  The created note is picked from that list as the
+        note whose text equals ``note``, so a note another user adds to the
+        same document at the same moment is not returned by mistake.  Only if
+        that text occurs more than once does the client look up the token's
+        user once (``GET /api/ui_settings/``, cached per client) and keep only
+        that user's notes; of the remaining notes the newest (highest ID) is
+        returned.
+
+        Telling identical texts of different users apart needs the
+        ``view_uisettings`` permission (or a superuser), because that lookup
+        uses ``/api/ui_settings/``.  Without it the lookup fails (403), the
+        failure is cached per client and logged as a warning, no error is
+        raised (the note already exists), and the newest note with that text
+        is returned, which may belong to another user.
+
+        Ambiguous case: if the token's user already has a note with the same
+        text on the document, or creates one concurrently, the notes cannot be
+        told apart and the newest one is returned.  It has the same text, user
+        and document; only ``id`` and ``created`` may differ from the note this
+        call created.  If no note in the response has the sent text (not
+        observed with paperless-ngx 2.18), the newest note is returned and a
+        warning is logged.
+
         Args:
             document_id: Numeric ID of the document to annotate.
             note: Text content of the note.
@@ -65,6 +89,8 @@ class SyncNotesResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
+            ~easypaperless.exceptions.ServerResponseError: If paperless-ngx
+                answers with an empty note list.
         """
         return cast(DocumentNote, self._run(self._async_notes.create(document_id, note=note)))
 

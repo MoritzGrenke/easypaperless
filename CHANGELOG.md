@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.1] - 2026-10-26
+
+### Added
+
+- **Current user and effective permissions** (`client.ui_settings()`, #0055): sends one authenticated `GET /api/ui_settings/` and returns the new `UiSettings` model: `user` (`id`, `username`, `is_staff`, `is_superuser`, `groups`), `permissions` (the user's effective permission codenames exactly as paperless returns them, bare such as `"add_document"`, including permissions granted via groups) and `settings` (`version`, `app_title`, `app_logo`, `trash_delay`, `auditlog_enabled`, `email_enabled`, `update_checking`; all optional, unknown fields ignored). Helpers `has_permission(codename)` and `missing_permissions(required) -> set[str]` name the permissions a user lacks (always none for a superuser). The endpoint requires the `view_uisettings` permission; without it paperless answers 403 (`PermissionDeniedError`). Available on `PaperlessClient` and `SyncPaperlessClient`; `UiSettings`, `UiSettingsUser` and `UiSettingsServerSettings` are exported from `easypaperless`. README has a new "Checking the service user's permissions" example.
+- **Read back object permissions with `full_perms`** (#0053): `get()` and `list()` of `documents`, `tags`, `correspondents`, `document_types` and `storage_paths` take a new keyword `full_perms: bool = False`. With `full_perms=True` paperless-ngx's `full_perms=true` is sent and the returned view/change users and groups are available as the new model field `permissions: SetPermissions | None` (same shape as `set_permissions`; IDs only). Without it no parameter is sent and `permissions` is `None`. With `full_perms=True` paperless-ngx omits `user_can_change` (and for documents `is_shared_by_requester`), so those fields are `None`. Custom fields, users and groups do not support `full_perms` in paperless-ngx. Available on `PaperlessClient` and `SyncPaperlessClient`.
+
+### Fixed
+
+- **`documents.notes.create()` returns the note it created** (#0054): paperless-ngx answers with the document's full note list; the client used to return the last entry, which under concurrent writes could be another user's note. It now picks the newest note with the sent text, and only if that text occurs several times looks up the token's user once (`GET /api/ui_settings/`) to keep that user's notes. If the same user has identical notes on the document, the newest is returned (documented ambiguity). Telling identical texts of different users apart needs the `view_uisettings` permission (or a superuser): without it the lookup fails with 403, is not retried for the rest of the client's lifetime, no error is raised (the note already exists), a warning is logged, and the newest note with that text is returned. Async and sync.
+
 ## [0.7.0] - 2026-10-26
 
 ### Added
