@@ -32,11 +32,11 @@ The ThruCapture Backend runs on Python 3.13 and pins easypaperless exactly; it n
 ---
 
 ## Acceptance Criteria
-- [ ] `pyproject.toml` lists Python 3.13 in its classifiers.
-- [ ] A CI workflow runs on every push and pull request and executes tests, ruff (check + format check) and mypy on 3.11, 3.12 and 3.13; all pass.
-- [ ] CHANGELOG has a 0.7.0 entry covering #0043–#0050, with breaking changes called out.
-- [ ] Version 0.7.0 is published on PyPI and installable with `pip install easypaperless==0.7.0` on Python 3.13.
-- [ ] A `v0.7.0` git tag exists.
+- [x] `pyproject.toml` lists Python 3.13 in its classifiers.
+- [x] A CI workflow runs on every push and pull request and executes tests, ruff (check + format check) and mypy on 3.11, 3.12 and 3.13; all pass.
+- [x] CHANGELOG has a 0.7.0 entry covering #0043–#0050, with breaking changes called out.
+- [x] Version 0.7.0 is published on PyPI and installable with `pip install easypaperless==0.7.0` on Python 3.13.
+- [x] A `v0.7.0` git tag exists.
 
 ---
 
@@ -52,7 +52,7 @@ The ThruCapture Backend runs on Python 3.13 and pins easypaperless exactly; it n
 
 ## Progress
 - 2026-10-26: CI / Python 3.13 part done (branch `ci/0051-ci-py313`): 3.13 classifier added, `.github/workflows/ci.yml` created (push + PR, matrix 3.11/3.12/3.13: pytest, ruff check, ruff format --check, mypy), `tenacity` added to `[dev]` extras. Full gate green locally on Python 3.13 (Windows); no 3.13 incompatibilities found. The workflow has not yet run on GitHub (Linux).
-- Open: release part (CHANGELOG 0.7.0 entry, docs, version bump, PyPI publish, `v0.7.0` tag) — needs user approval.
+- 2026-10-26: Release part done: ruff/mypy pinned after ruff 0.17 broke the CI format check, CHANGELOG 0.7.0, pdoc regenerated, version 0.7.0, PR #1 merged, tag `v0.7.0` pushed, published on PyPI (wheel + sdist).
 
 ---
 

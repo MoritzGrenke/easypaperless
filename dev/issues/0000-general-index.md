@@ -46,13 +46,13 @@
 | 0040 | Bug | Wrong Query Parameter Keys for Single-Value Filters in `documents.list()` | Deployed | [0040-bug-document_type_filter_ignored_in_list.md](0040-bug-document_type_filter_ignored_in_list.md) |
 | 0041 | Feature | Optional Retry-with-Backoff Support for Transient Network/Proxy Errors | Deployed | [0041-feature-retry_with_backoff_on_transient_errors.md](0041-feature-retry_with_backoff_on_transient_errors.md) |
 | 0042 | Feature | Document History (Audit Log) Endpoint | Deployed | [0042-feature-document_history_endpoint.md](0042-feature-document_history_endpoint.md) |
-| 0043 | Feature | Injectable HTTP Transport for PaperlessClient and SyncPaperlessClient | Implemented | [0043-feature-injectable_http_transport.md](0043-feature-injectable_http_transport.md) |
-| 0044 | Feature | Upload Documents from Bytes and Per-Call Upload Timeout | Implemented | [0044-feature-upload_document_from_bytes.md](0044-feature-upload_document_from_bytes.md) |
-| 0045 | Feature | Tasks Resource (list, get, wait, acknowledge) | Implemented | [0045-feature-tasks_resource.md](0045-feature-tasks_resource.md) |
-| 0046 | Feature | Classifiable Error Hierarchy (401 vs 403, 400 Field Errors, Transport vs 5xx) | Implemented | [0046-feature-classifiable_error_hierarchy.md](0046-feature-classifiable_error_hierarchy.md) |
-| 0047 | Task | Guarantee the API Token and Other Secrets Never Appear in Exceptions, Reprs or Logs | Implemented | [0047-task-api_token_never_leaked.md](0047-task-api_token_never_leaked.md) |
-| 0048 | Feature | Server Version Check and System Status | Implemented | [0048-feature-server_version_and_status.md](0048-feature-server_version_and_status.md) |
-| 0049 | Feature | Groups Resource CRUD | Implemented | [0049-feature-groups_resource_crud.md](0049-feature-groups_resource_crud.md) |
-| 0050 | Task | Verify Existing Capabilities Needed by a Delivery Target | Implemented | [0050-task-verify_delivery_target_capabilities.md](0050-task-verify_delivery_target_capabilities.md) |
-| 0051 | Maintenance | Python 3.13 Support and 0.7.0 Release | In Progress | [0051-maintenance-python_313_support_and_release_070.md](0051-maintenance-python_313_support_and_release_070.md) |
-| 0052 | Documentation | Update Developer Docs and API Conventions to the Current Code Structure | Implemented | [0052-documentation-update_developer_docs_to_current_structure.md](0052-documentation-update_developer_docs_to_current_structure.md) |
+| 0043 | Feature | Injectable HTTP Transport for PaperlessClient and SyncPaperlessClient | Deployed | [0043-feature-injectable_http_transport.md](0043-feature-injectable_http_transport.md) |
+| 0044 | Feature | Upload Documents from Bytes and Per-Call Upload Timeout | Deployed | [0044-feature-upload_document_from_bytes.md](0044-feature-upload_document_from_bytes.md) |
+| 0045 | Feature | Tasks Resource (list, get, wait, acknowledge) | Deployed | [0045-feature-tasks_resource.md](0045-feature-tasks_resource.md) |
+| 0046 | Feature | Classifiable Error Hierarchy (401 vs 403, 400 Field Errors, Transport vs 5xx) | Deployed | [0046-feature-classifiable_error_hierarchy.md](0046-feature-classifiable_error_hierarchy.md) |
+| 0047 | Task | Guarantee the API Token and Other Secrets Never Appear in Exceptions, Reprs or Logs | Deployed | [0047-task-api_token_never_leaked.md](0047-task-api_token_never_leaked.md) |
+| 0048 | Feature | Server Version Check and System Status | Deployed | [0048-feature-server_version_and_status.md](0048-feature-server_version_and_status.md) |
+| 0049 | Feature | Groups Resource CRUD | Deployed | [0049-feature-groups_resource_crud.md](0049-feature-groups_resource_crud.md) |
+| 0050 | Task | Verify Existing Capabilities Needed by a Delivery Target | Deployed | [0050-task-verify_delivery_target_capabilities.md](0050-task-verify_delivery_target_capabilities.md) |
+| 0051 | Maintenance | Python 3.13 Support and 0.7.0 Release | Deployed | [0051-maintenance-python_313_support_and_release_070.md](0051-maintenance-python_313_support_and_release_070.md) |
+| 0052 | Documentation | Update Developer Docs and API Conventions to the Current Code Structure | Deployed | [0052-documentation-update_developer_docs_to_current_structure.md](0052-documentation-update_developer_docs_to_current_structure.md) |
