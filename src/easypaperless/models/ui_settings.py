@@ -76,7 +76,9 @@ class UiSettings(BaseModel):
             paperless-ngx returns them: bare codenames such as
             ``"add_document"`` or ``"view_paperlesstask"``, including
             permissions granted via groups. For a superuser paperless lists
-            every permission.
+            every permission. Note: codenames are bare (``"add_document"``),
+            unlike the app-labelled ``PaperlessPermission`` form
+            (``"documents.add_document"``).
         settings: Server-side settings (version, app title, trash delay, ...).
     """
 
