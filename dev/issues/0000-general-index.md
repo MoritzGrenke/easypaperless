@@ -50,7 +50,7 @@
 | 0044 | Feature | Upload Documents from Bytes and Per-Call Upload Timeout | Open | [0044-feature-upload_document_from_bytes.md](0044-feature-upload_document_from_bytes.md) |
 | 0045 | Feature | Tasks Resource (list, get, wait, acknowledge) | Open | [0045-feature-tasks_resource.md](0045-feature-tasks_resource.md) |
 | 0046 | Feature | Classifiable Error Hierarchy (401 vs 403, 400 Field Errors, Transport vs 5xx) | Implemented | [0046-feature-classifiable_error_hierarchy.md](0046-feature-classifiable_error_hierarchy.md) |
-| 0047 | Task | Guarantee the API Token and Other Secrets Never Appear in Exceptions, Reprs or Logs | Open | [0047-task-api_token_never_leaked.md](0047-task-api_token_never_leaked.md) |
+| 0047 | Task | Guarantee the API Token and Other Secrets Never Appear in Exceptions, Reprs or Logs | Implemented | [0047-task-api_token_never_leaked.md](0047-task-api_token_never_leaked.md) |
 | 0048 | Feature | Server Version Check and System Status | Implemented | [0048-feature-server_version_and_status.md](0048-feature-server_version_and_status.md) |
 | 0049 | Feature | Groups Resource CRUD | Implemented | [0049-feature-groups_resource_crud.md](0049-feature-groups_resource_crud.md) |
 | 0050 | Task | Verify Existing Capabilities Needed by a Delivery Target | Open | [0050-task-verify_delivery_target_capabilities.md](0050-task-verify_delivery_target_capabilities.md) |

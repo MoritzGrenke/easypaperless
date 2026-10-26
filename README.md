@@ -221,6 +221,18 @@ except ServerResponseError as err:
 
 The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
 
+## 🔒 Security: Secrets in Logs and Errors
+
+easypaperless never puts your API token into exception messages, `repr()` of clients/resources, or its own log records (at any level, including `DEBUG`). The `Authorization` header is never logged, and when request bodies are logged at `DEBUG`, `password` values (e.g. from `users.create()` / `users.update()`) are replaced by `"***"`.
+
+Not covered: secrets you put into URLs, query parameters or free-text fields (e.g. note text) yourself, and logging done by `httpx`/`httpcore`. Those libraries log at `DEBUG` under the `httpx` and `httpcore` loggers; keep them at `WARNING` or above in production:
+
+```python
+import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+```
+
 ## 📖 Functional Overview
 
 All functionality is accessed through resource attributes on the client (e.g. `client.documents`, `client.tags`). Both `PaperlessClient` (async) and `SyncPaperlessClient` (sync) expose the same resources and methods.

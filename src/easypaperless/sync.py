@@ -59,6 +59,10 @@ class _SyncCore:
         self.groups = SyncGroupsResource(self._async_client.groups, self._run)
         self.trash = SyncTrashResource(self._async_client.trash, self._run)
 
+    def __repr__(self) -> str:
+        # Never include the API token (#0047).
+        return f"{type(self).__name__}(url={self._async_client._url!r})"
+
     def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
         """Submit a coroutine to the background event loop and block until done."""
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)

@@ -54,6 +54,7 @@ class _ClientCore:
         tenacity_retrying: Any = None,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
+        self._url = url.rstrip("/")
         self._session = HttpSession(
             base_url=url,
             api_token=api_token,
@@ -77,6 +78,10 @@ class _ClientCore:
         self.users = UsersResource(self)
         self.groups = GroupsResource(self)
         self.trash = TrashResource(self)
+
+    def __repr__(self) -> str:
+        # Never include the API token (#0047).
+        return f"{type(self).__name__}(url={self._url!r})"
 
     async def close(self) -> None:
         """Close the underlying HTTP connection pool."""
