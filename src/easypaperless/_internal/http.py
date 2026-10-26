@@ -11,9 +11,7 @@ from typing import Any
 
 import httpx
 
-# ``_sanitise_body`` is re-exported for backward compatibility (tests import it from here).
-from easypaperless._internal.errors import _sanitise_body as _sanitise_body
-from easypaperless._internal.errors import map_transport_error, raise_for_status
+from easypaperless._internal import errors
 from easypaperless.exceptions import (
     RetryExhaustedError,
     ServerError,
@@ -58,6 +56,8 @@ class _PagedRaw:
     previous: str | None
     all_ids: list[int] | None
     items: list[dict[str, Any]]
+    # ``False`` when the endpoint answered with a plain JSON array (no envelope).
+    paginated: bool = True
 
 
 class HttpSession:
@@ -90,6 +90,11 @@ class HttpSession:
         # Never include the API token (#0047).
         return f"{type(self).__name__}(base_url={self._base_url!r})"
 
+    @property
+    def base_url(self) -> str:
+        """The API root URL, e.g. ``"http://localhost:8000/api"``."""
+        return self._base_url
+
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
@@ -106,9 +111,6 @@ class HttpSession:
             await self._client.aclose()
             self._client = None
 
-    def _raise_for_status(self, response: httpx.Response, method: str, path: str) -> None:
-        raise_for_status(response, method, path)
-
     async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
         """Send one request; the only place that calls the httpx client.
 
@@ -119,7 +121,7 @@ class HttpSession:
         try:
             return await self._get_client().request(method, url, **kwargs)
         except httpx.HTTPError as exc:
-            raise map_transport_error(exc, method, url) from exc
+            raise errors.map_transport_error(exc, method, url) from exc
 
     async def _do_request(
         self,
@@ -148,7 +150,7 @@ class HttpSession:
             if len(body) > 1000:
                 body = body[:1000] + "...<truncated>"
             logger.debug("%s %s %s response=%s", response.status_code, method.upper(), path, body)
-        self._raise_for_status(response, method, path)
+        errors.raise_for_status(response, method, path)
         return response
 
     async def request(
@@ -273,7 +275,7 @@ class HttpSession:
             hops += 1
 
         logger.debug("%d GET %s", resp.status_code, path)
-        self._raise_for_status(resp, "GET", path)
+        errors.raise_for_status(resp, "GET", path)
         return resp
 
     async def post(
@@ -412,13 +414,69 @@ class HttpSession:
             A :class:`_PagedRaw` with all collected items and first-page
             metadata.
         """
-        results: list[dict[str, Any]] = []
         if params:
             logger.debug("Fetching %s (params=%s)", path, params)
         else:
             logger.debug("Fetching %s", path)
         response = await self.get(path, params=params)
-        page = response.json()
+        return await self._collect_pages(
+            path, response.json(), max_results=max_results, on_page=on_page
+        )
+
+    async def get_list(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        all_pages: bool = True,
+    ) -> _PagedRaw:
+        """Fetch a list endpoint that returns a plain JSON array *or* a paginated envelope.
+
+        Some paperless-ngx endpoints (notes, tasks) answer with a plain JSON
+        array; a paginated dict is accepted as well.  A plain array is
+        returned as one page with ``paginated=False``, ``count`` set to its
+        length and no ``next`` / ``previous`` / ``all_ids``.  A paginated dict
+        is handled like :meth:`get_all_pages_paged` when *all_pages* is
+        ``True``, or like :meth:`get_page` otherwise.
+
+        Args:
+            path: API path relative to the base URL.
+            params: Optional query parameters.
+            all_pages: Follow the ``next`` links of a paginated response.
+
+        Returns:
+            A :class:`_PagedRaw` with the collected items.
+        """
+        logger.debug("Fetching %s (params=%s)", path, params)
+        data = (await self.get(path, params=params)).json()
+        if isinstance(data, list):
+            return _PagedRaw(len(data), None, None, None, data, paginated=False)
+        if not isinstance(data, dict):
+            return _PagedRaw(0, None, None, None, [], paginated=False)
+        if not all_pages:
+            return _PagedRaw(
+                count=data.get("count", 0),
+                next=data.get("next"),
+                previous=data.get("previous"),
+                all_ids=data.get("all"),
+                items=data.get("results", []),
+            )
+        return await self._collect_pages(path, data)
+
+    async def _collect_pages(
+        self,
+        path: str,
+        page: dict[str, Any],
+        *,
+        max_results: int | None = None,
+        on_page: Callable[[int, int | None], None] | None = None,
+    ) -> _PagedRaw:
+        """Collect the items of *page* and of every page linked via ``next``.
+
+        ``next`` / ``previous`` of the result are ``None``; ``count`` and
+        ``all_ids`` come from *page*.
+        """
+        results: list[dict[str, Any]] = []
         total_count: int = page.get("count", 0)
         all_ids: list[int] | None = page.get("all")
         results.extend(page.get("results", []))

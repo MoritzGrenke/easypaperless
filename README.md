@@ -223,6 +223,8 @@ except ServerResponseError as err:
 
 The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
 
+When all retries are exhausted you get a `RetryExhaustedError`; the original classifiable error of the last attempt (e.g. `TransportError` or `ServerResponseError`) is available as its `__cause__`, so `isinstance(err.__cause__, TransportError)` tells you what went wrong.
+
 Requests that create something are **never retried**, whatever `retry_attempts` or `tenacity_retrying` say: `documents.upload()`, every resource's `create()` and `documents.notes.create()`. If the response is lost after paperless has already accepted the request (e.g. a timeout), a retry would create a duplicate. These calls send exactly one request and raise the error (e.g. `TransportTimeoutError`), so you can decide yourself whether to check and try again. All other requests (GET, PATCH, DELETE and the bulk/trash/task-acknowledge POSTs) keep retrying.
 
 ## 🔒 Security: Secrets in Logs and Errors

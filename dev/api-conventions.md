@@ -51,6 +51,10 @@ async def get(self, id: int) -> Tag: ...
 async def update(self, id: int, *, name: str | Unset = UNSET) -> Tag: ...
 ```
 
+Documented exception: `tasks.get(task_id)` and `tasks.wait(task_id)` take `task_id: str`,
+because they look a task up by its Celery task UUID, not by its numeric primary key.
+Methods that take the numeric key follow the rule (`tasks.acknowledge(ids)`).
+
 ### Sub-resource and multi-object keys
 - In a sub-resource the parent key is `{parent_singular}_id`, the sub-resource's own key
   is `{resource_singular}_id`:

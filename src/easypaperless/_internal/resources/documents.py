@@ -9,15 +9,17 @@ import re
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Literal, cast
+from typing import TYPE_CHECKING, Any, List, Literal
 
+import httpx
+
+from easypaperless._internal.resources.notes import NotesResource
 from easypaperless._internal.sentinel import UNSET, Unset
 from easypaperless.exceptions import ServerResponseError, UploadError, ValidationError
 from easypaperless.models.documents import (
     AuditLogEntry,
     Document,
     DocumentMetadata,
-    DocumentNote,
 )
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import SetPermissions
@@ -26,6 +28,8 @@ if TYPE_CHECKING:
     from easypaperless.client import _ClientCore
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["DocumentsResource", "NotesResource"]
 
 _DATETIME_STR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T")
 
@@ -37,137 +41,23 @@ _SEARCH_MODE_MAP = {
 }
 
 
-class NotesResource:
-    """Accessor for document notes: ``client.documents.notes``."""
+def _binary_content(resp: httpx.Response, what: str) -> bytes:
+    """Return the body of a binary download, rejecting an HTML page.
 
-    def __init__(self, core: _ClientCore) -> None:
-        self._core = core
+    A reverse proxy or auth layer may answer a download with a login page
+    (HTTP 200, HTML) instead of the file.
 
-    async def list(
-        self,
-        document_id: int,
-        *,
-        page: int | None = None,
-        page_size: int | None = None,
-    ) -> PagedResult[DocumentNote]:
-        """Fetch notes attached to a document.
-
-        When ``page`` is ``None`` (the default), all pages are fetched
-        automatically and ``next`` / ``previous`` in the returned
-        :class:`~easypaperless.models.paged_result.PagedResult` are always
-        ``None``.  When ``page`` is set to a specific integer, only that one
-        page is fetched and ``next`` / ``previous`` contain the raw API values.
-
-        Args:
-            document_id: Numeric ID of the document whose notes to retrieve.
-            page: Return only this specific page (1-based).
-            page_size: Number of results per page.
-
-        Returns:
-            :class:`~easypaperless.models.paged_result.PagedResult` of
-            :class:`~easypaperless.models.documents.DocumentNote` objects,
-            ordered by creation time.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        logger.info("Listing notes for document id=%d", document_id)
-        path = f"/documents/{document_id}/notes/"
-        params: dict[str, Any] = {}
-        if page_size is not None:
-            params["page_size"] = page_size
-        if page is not None:
-            params["page"] = page
-
-        resp = await self._core._session.get(path, params=params or None)
-        data = resp.json()
-
-        if isinstance(data, list):
-            # The paperless-ngx notes endpoint returns a plain JSON array rather
-            # than a paginated envelope.  Build a synthetic PagedResult so callers
-            # always receive a consistent return type regardless of API version.
-            notes = [DocumentNote.model_validate(item) for item in data]
-            note_ids = [n.id for n in notes if n.id is not None]
-            all_ids: list[int] | None = note_ids if note_ids else None
-            return PagedResult(
-                count=len(notes),
-                next=None,
-                previous=None,
-                all=all_ids,
-                results=notes,
-            )
-
-        # Paginated dict envelope — forward-compatible with potential future API changes.
-        items: list[Any] = list(data.get("results", []))
-        count: int = data.get("count", 0)
-        page_all_ids: list[int] | None = data.get("all")
-
-        if page is None:
-            next_url: str | None = data.get("next")
-            while next_url:
-                next_url = self._core._session._normalise_next_url(next_url)
-                page_resp = await self._core._session.get(next_url)
-                page_data = page_resp.json()
-                items.extend(page_data.get("results", []))
-                next_url = page_data.get("next")
-            return PagedResult(
-                count=count,
-                next=None,
-                previous=None,
-                all=page_all_ids,
-                results=[DocumentNote.model_validate(item) for item in items],
-            )
-
-        return cast(
-            PagedResult[DocumentNote],
-            PagedResult(
-                count=count,
-                next=data.get("next"),
-                previous=data.get("previous"),
-                all=page_all_ids,
-                results=[DocumentNote.model_validate(item) for item in items],
-            ),
+    Raises:
+        ~easypaperless.exceptions.ServerResponseError: If the response is HTML.
+    """
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
+        raise ServerResponseError(
+            f"{what} returned an HTML page (content-type: {content_type!r}). "
+            "The server redirected to a login page even after re-attaching auth.",
+            status_code=resp.status_code,
         )
-
-    async def create(self, document_id: int, *, note: str) -> DocumentNote:
-        """Create a new note on a document.
-
-        Args:
-            document_id: Numeric ID of the document to annotate.
-            note: Text content of the note.
-
-        Returns:
-            The newly created :class:`~easypaperless.models.documents.DocumentNote`.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        logger.info("Creating note for document id=%d", document_id)
-        resp = await self._core._session.post(
-            f"/documents/{document_id}/notes/",
-            json={"note": note},
-            retry=False,  # a retry after a lost response could add the note twice
-        )
-        data = resp.json()
-        if isinstance(data, list):
-            return DocumentNote.model_validate(data[-1])
-        return DocumentNote.model_validate(data)
-
-    async def delete(self, document_id: int, note_id: int) -> None:
-        """Delete a note from a document.
-
-        Args:
-            document_id: Numeric ID of the document that owns the note.
-            note_id: Numeric ID of the note to delete.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document or note
-                exists with the given IDs.
-        """
-        logger.info("Deleting note id=%d from document id=%d", note_id, document_id)
-        await self._core._session.delete(f"/documents/{document_id}/notes/", params={"id": note_id})
+    return resp.content
 
 
 class DocumentsResource:
@@ -733,14 +623,7 @@ class DocumentsResource:
         if original:
             path += "?original=true"
         resp = await self._core._session.get_download(path)
-        content_type = resp.headers.get("content-type", "")
-        if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerResponseError(
-                f"Download returned an HTML page (content-type: {content_type!r}). "
-                "The server redirected to a login page even after re-attaching auth.",
-                status_code=resp.status_code,
-            )
-        return resp.content
+        return _binary_content(resp, "Download")
 
     async def thumbnail(self, id: int) -> bytes:
         """Fetch the thumbnail image of a document.
@@ -759,14 +642,7 @@ class DocumentsResource:
         """
         logger.info("Fetching thumbnail for document id=%d", id)
         resp = await self._core._session.get_download(f"/documents/{id}/thumb/")
-        content_type = resp.headers.get("content-type", "")
-        if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerResponseError(
-                f"Thumbnail returned an HTML page (content-type: {content_type!r}). "
-                "The server redirected to a login page even after re-attaching auth.",
-                status_code=resp.status_code,
-            )
-        return resp.content
+        return _binary_content(resp, "Thumbnail")
 
     async def upload(
         self,

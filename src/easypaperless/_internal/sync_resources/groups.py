@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, List, cast
+import builtins
+from typing import TYPE_CHECKING, Any, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
 from easypaperless.models.groups import Group
@@ -78,7 +79,7 @@ class SyncGroupsResource:
         self,
         *,
         name: str,
-        permissions: List[str] | Unset = UNSET,
+        permissions: builtins.list[str] | Unset = UNSET,
     ) -> Group:
         """Create a new group.
 
@@ -103,7 +104,7 @@ class SyncGroupsResource:
         id: int,
         *,
         name: str | Unset = UNSET,
-        permissions: List[str] | Unset = UNSET,
+        permissions: builtins.list[str] | Unset = UNSET,
     ) -> Group:
         """Partially update a group (PATCH semantics).
 

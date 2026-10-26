@@ -349,7 +349,7 @@ class PaperlessClient(_ClientCore):
             2.18.4
         """
         logger.info("Getting server version")
-        url = f"{self._session._base_url}/"
+        url = f"{self._session.base_url}/"
         try:
             resp = await self._session.get("/")
         except NotFoundError as exc:
