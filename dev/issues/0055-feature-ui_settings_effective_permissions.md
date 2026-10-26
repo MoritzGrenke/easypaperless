@@ -59,7 +59,7 @@ A service that uses easypaperless with a dedicated service user (e.g. the ThruCa
 - [x] On a live instance, for a non-admin user with one permission granted directly and one only via a group, both appear in `permissions` (or, if paperless does not include group permissions, this is documented and `missing_permissions()` accounts for it).
 - [x] The token never appears in reprs, exceptions or logs of the new call (covered by the #0047 test pattern).
 - [x] The sync client offers the identical API.
-- [ ] Released as 0.7.1 on PyPI.
+- [x] Released as 0.7.1 on PyPI.
 
 ---
 

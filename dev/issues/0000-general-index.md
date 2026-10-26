@@ -56,6 +56,6 @@
 | 0050 | Task | Verify Existing Capabilities Needed by a Delivery Target | Deployed | [0050-task-verify_delivery_target_capabilities.md](0050-task-verify_delivery_target_capabilities.md) |
 | 0051 | Maintenance | Python 3.13 Support and 0.7.0 Release | Deployed | [0051-maintenance-python_313_support_and_release_070.md](0051-maintenance-python_313_support_and_release_070.md) |
 | 0052 | Documentation | Update Developer Docs and API Conventions to the Current Code Structure | Deployed | [0052-documentation-update_developer_docs_to_current_structure.md](0052-documentation-update_developer_docs_to_current_structure.md) |
-| 0053 | Feature | Read Back Object Permissions (`full_perms`) for Documents and Other Owned Objects | Implemented | [0053-feature-read_object_permissions_full_perms.md](0053-feature-read_object_permissions_full_perms.md) |
-| 0054 | Bug | `notes.create()` May Return Another User's Note Under Concurrent Writes | Implemented | [0054-bug-notes_create_may_return_wrong_note.md](0054-bug-notes_create_may_return_wrong_note.md) |
-| 0055 | Feature | UI Settings Endpoint: Current User and Effective Permissions (`client.ui_settings()`) | Implemented | [0055-feature-ui_settings_effective_permissions.md](0055-feature-ui_settings_effective_permissions.md) |
+| 0053 | Feature | Read Back Object Permissions (`full_perms`) for Documents and Other Owned Objects | Deployed | [0053-feature-read_object_permissions_full_perms.md](0053-feature-read_object_permissions_full_perms.md) |
+| 0054 | Bug | `notes.create()` May Return Another User's Note Under Concurrent Writes | Deployed | [0054-bug-notes_create_may_return_wrong_note.md](0054-bug-notes_create_may_return_wrong_note.md) |
+| 0055 | Feature | UI Settings Endpoint: Current User and Effective Permissions (`client.ui_settings()`) | Deployed | [0055-feature-ui_settings_effective_permissions.md](0055-feature-ui_settings_effective_permissions.md) |
