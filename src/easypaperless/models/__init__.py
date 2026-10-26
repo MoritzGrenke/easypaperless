@@ -16,6 +16,7 @@ from easypaperless.models.documents import (
     Task,
     TaskStatus,
 )
+from easypaperless.models.groups import Group
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import PermissionSet, SetPermissions
 from easypaperless.models.storage_paths import StoragePath
@@ -44,5 +45,6 @@ __all__ = [
     "Task",
     "TaskStatus",
     "User",
+    "Group",
     "PaperlessPermission",
 ]

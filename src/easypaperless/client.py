@@ -13,6 +13,7 @@ from easypaperless._internal.resources.correspondents import CorrespondentsResou
 from easypaperless._internal.resources.custom_fields import CustomFieldsResource
 from easypaperless._internal.resources.document_types import DocumentTypesResource
 from easypaperless._internal.resources.documents import DocumentsResource
+from easypaperless._internal.resources.groups import GroupsResource
 from easypaperless._internal.resources.storage_paths import StoragePathsResource
 from easypaperless._internal.resources.tags import TagsResource
 from easypaperless._internal.resources.trash import TrashResource
@@ -34,6 +35,7 @@ class _ClientCore:
     storage_paths: StoragePathsResource
     custom_fields: CustomFieldsResource
     users: UsersResource
+    groups: GroupsResource
     trash: TrashResource
 
     def __init__(
@@ -71,6 +73,7 @@ class _ClientCore:
         self.storage_paths = StoragePathsResource(self)
         self.custom_fields = CustomFieldsResource(self)
         self.users = UsersResource(self)
+        self.groups = GroupsResource(self)
         self.trash = TrashResource(self)
 
     async def close(self) -> None:
@@ -189,6 +192,8 @@ class PaperlessClient(_ClientCore):
       see `easypaperless.resources.StoragePathsResource`
     * ``client.tags`` — tag CRUD + bulk ops -
       see `easypaperless.resources.TagsResource`
+    * ``client.groups`` — group CRUD -
+      see `easypaperless.resources.GroupsResource`
     * ``client.users`` — user CRUD -
       see `easypaperless.resources.UsersResource`
     * ``client.trash`` — list, restore, and permanently delete trashed documents -

@@ -30,6 +30,7 @@ from easypaperless.models import (
     DocumentType,
     FieldDataType,
     FileMetadataEntry,
+    Group,
     MatchingAlgorithm,
     PagedResult,
     PaperlessPermission,
@@ -76,6 +77,7 @@ __all__ = [
     "Task",
     "TaskStatus",
     "User",
+    "Group",
     "PaperlessPermission",
     # Exceptions
     "PaperlessError",

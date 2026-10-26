@@ -15,6 +15,7 @@ from easypaperless._internal.sync_resources.correspondents import SyncCorrespond
 from easypaperless._internal.sync_resources.custom_fields import SyncCustomFieldsResource
 from easypaperless._internal.sync_resources.document_types import SyncDocumentTypesResource
 from easypaperless._internal.sync_resources.documents import SyncDocumentsResource
+from easypaperless._internal.sync_resources.groups import SyncGroupsResource
 from easypaperless._internal.sync_resources.storage_paths import SyncStoragePathsResource
 from easypaperless._internal.sync_resources.tags import SyncTagsResource
 from easypaperless._internal.sync_resources.trash import SyncTrashResource
@@ -34,6 +35,7 @@ class _SyncCore:
     storage_paths: SyncStoragePathsResource
     custom_fields: SyncCustomFieldsResource
     users: SyncUsersResource
+    groups: SyncGroupsResource
     trash: SyncTrashResource
 
     def __init__(self, url: str, api_token: str, **kwargs: Any) -> None:
@@ -53,6 +55,7 @@ class _SyncCore:
         self.storage_paths = SyncStoragePathsResource(self._async_client.storage_paths, self._run)
         self.custom_fields = SyncCustomFieldsResource(self._async_client.custom_fields, self._run)
         self.users = SyncUsersResource(self._async_client.users, self._run)
+        self.groups = SyncGroupsResource(self._async_client.groups, self._run)
         self.trash = SyncTrashResource(self._async_client.trash, self._run)
 
     def _run(self, coro: Coroutine[Any, Any, _T]) -> _T:
@@ -99,6 +102,8 @@ class SyncPaperlessClient(_SyncCore):
       see `easypaperless.resources.SyncStoragePathsResource`
     * ``client.tags`` — tag CRUD + bulk ops -
       see `easypaperless.resources.SyncTagsResource`
+    * ``client.groups`` — group CRUD -
+      see `easypaperless.resources.SyncGroupsResource`
     * ``client.users`` — user CRUD -
       see `easypaperless.resources.SyncUsersResource`
     * ``client.trash`` — list, restore, and permanently delete trashed documents -

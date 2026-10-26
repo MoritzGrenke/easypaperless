@@ -20,7 +20,7 @@ client.trash.restore([1, 2])          # SyncPaperlessClient
 
 - Resource attribute names are the plural, snake_case form of the endpoint:
   `documents`, `tags`, `correspondents`, `document_types`, `storage_paths`,
-  `custom_fields`, `users`, `trash`.
+  `custom_fields`, `users`, `groups`, `trash`.
 - Sub-resources hang off their parent resource: `client.documents.notes`.
 - Do not add flat method names such as `list_tags` or `get_tag` on the client.
 
