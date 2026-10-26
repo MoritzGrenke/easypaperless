@@ -50,5 +50,11 @@ The ThruCapture Backend runs on Python 3.13 and pins easypaperless exactly; it n
 
 ---
 
+## Progress
+- 2026-10-26: CI / Python 3.13 part done (branch `ci/0051-ci-py313`): 3.13 classifier added, `.github/workflows/ci.yml` created (push + PR, matrix 3.11/3.12/3.13: pytest, ruff check, ruff format --check, mypy), `tenacity` added to `[dev]` extras. Full gate green locally on Python 3.13 (Windows); no 3.13 incompatibilities found. The workflow has not yet run on GitHub (Linux).
+- Open: release part (CHANGELOG 0.7.0 entry, docs, version bump, PyPI publish, `v0.7.0` tag) — needs user approval.
+
+---
+
 ## Additional Notes
 - Requester: ThruCapture Backend, Must-items 12 and 13.

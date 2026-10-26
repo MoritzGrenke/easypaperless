@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+
+- **Python 3.13 officially supported; CI workflow** (#0051): Python 3.13 is now listed in the package classifiers. A new GitHub Actions workflow (`.github/workflows/ci.yml`) runs the test suite, `ruff check`, `ruff format --check` and `mypy` on Python 3.11, 3.12 and 3.13 for every push and pull request. `tenacity` was added to the `dev` extras so the tenacity retry tests run in CI.
+
+---
+
 ## [0.6.0] - 2026-04-10
 
 ### Added
