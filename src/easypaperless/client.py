@@ -16,6 +16,7 @@ from easypaperless._internal.resources.documents import DocumentsResource
 from easypaperless._internal.resources.groups import GroupsResource
 from easypaperless._internal.resources.storage_paths import StoragePathsResource
 from easypaperless._internal.resources.tags import TagsResource
+from easypaperless._internal.resources.tasks import TasksResource
 from easypaperless._internal.resources.trash import TrashResource
 from easypaperless._internal.resources.users import UsersResource
 from easypaperless._internal.sentinel import UNSET, Unset
@@ -39,6 +40,7 @@ class _ClientCore:
     users: UsersResource
     groups: GroupsResource
     trash: TrashResource
+    tasks: TasksResource
 
     def __init__(
         self,
@@ -78,6 +80,7 @@ class _ClientCore:
         self.users = UsersResource(self)
         self.groups = GroupsResource(self)
         self.trash = TrashResource(self)
+        self.tasks = TasksResource(self)
 
     def __repr__(self) -> str:
         # Never include the API token (#0047).
@@ -205,6 +208,8 @@ class PaperlessClient(_ClientCore):
       see `easypaperless.resources.UsersResource`
     * ``client.trash`` — list, restore, and permanently delete trashed documents -
       see `easypaperless.resources.TrashResource`
+    * ``client.tasks`` — list, get, wait for, and acknowledge background tasks -
+      see `easypaperless.resources.TasksResource`
 
     Server information is available directly on the client:
     :meth:`server_version` (connection check) and :meth:`system_status`.

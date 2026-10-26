@@ -3,46 +3,13 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from enum import StrEnum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
-class TaskStatus(StrEnum):
-    """Status values for a paperless-ngx background processing task."""
-
-    PENDING = "PENDING"
-    STARTED = "STARTED"
-    SUCCESS = "SUCCESS"
-    FAILURE = "FAILURE"
-    RETRY = "RETRY"
-    REVOKED = "REVOKED"
-
-
-class Task(BaseModel):
-    """A paperless-ngx background processing task (e.g. document ingestion).
-
-    Attributes:
-        task_id: Unique Celery task identifier.
-        task_file_name: Original file name submitted for processing.
-        status: Current task status as a :class:`TaskStatus` enum value.
-        result: Human-readable result or error message, set on completion.
-        related_document: String representation of the resulting document ID
-            on success, ``None`` otherwise.
-    """
-
-    model_config = ConfigDict(extra="ignore")
-
-    task_id: str
-    task_file_name: str | None = None
-    date_created: datetime | None = None
-    date_done: datetime | None = None
-    type: str | None = None
-    status: TaskStatus | None = None
-    result: str | None = None
-    acknowledged: bool | None = None
-    related_document: str | None = None
+# Task models live in models/tasks.py; re-exported here for backward compatibility.
+from easypaperless.models.tasks import Task as Task
+from easypaperless.models.tasks import TaskStatus as TaskStatus
 
 
 class SearchHit(BaseModel):

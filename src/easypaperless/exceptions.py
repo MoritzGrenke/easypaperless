@@ -24,6 +24,11 @@ Any other HTTP error status (e.g. 409, 429) raises a plain ``PaperlessError``.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from easypaperless.models.tasks import Task
+
 
 class PaperlessError(Exception):
     """Base exception for all easypaperless errors.
@@ -155,24 +160,71 @@ class TransportTimeoutError(TransportError):
 class UploadError(PaperlessError):
     """Raised when file submission or document processing fails.
 
-    Raised by ``client.documents.upload()`` (with ``wait=True``, see
-    :meth:`~easypaperless.resources.DocumentsResource.upload`) when the
-    paperless-ngx processing task reports ``FAILURE`` or ``REVOKED``, or
+    Raised by ``client.tasks.wait()`` (see
+    :meth:`~easypaperless.resources.TasksResource.wait`) and therefore by
+    ``client.documents.upload(wait=True)`` when the paperless-ngx task reports
+    ``FAILURE`` or ``REVOKED``, and by ``upload(wait=True)`` when the task
     succeeds without returning a document ID.
+
+    Attributes:
+        task: The final :class:`~easypaperless.models.tasks.Task` as reported
+            by paperless-ngx (``task_id``, ``status`` and ``result``
+            unaltered), or ``None`` if no task is involved.  Inspect
+            ``task.result`` to tell failures apart, e.g. a duplicate
+            (``"Not consuming x.pdf: It is a duplicate of y (#12)."``) from an
+            OCR error.
     """
+
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        *,
+        task: Task | None = None,
+    ) -> None:
+        """Create an UploadError.
+
+        Args:
+            message: Human-readable error description.
+            status_code: HTTP status code, if applicable.
+            task: The failed task, if the error comes from task processing.
+        """
+        super().__init__(message, status_code=status_code)
+        self.task = task
 
 
 class TaskTimeoutError(PaperlessError):
-    """Raised when upload polling exceeds the configured timeout.
+    """Raised when waiting for a task exceeds the configured timeout.
 
-    Raised by ``client.documents.upload()`` (with ``wait=True``, see
-    :meth:`~easypaperless.resources.DocumentsResource.upload`) when the
-    document processing task does not reach a terminal state within
-    ``poll_timeout`` seconds.
+    Raised by ``client.tasks.wait()`` (see
+    :meth:`~easypaperless.resources.TasksResource.wait`) and therefore by
+    ``client.documents.upload(wait=True)`` when the task does not reach a
+    terminal state within ``poll_timeout`` seconds.  The task keeps running
+    in paperless-ngx; call ``client.tasks.wait(err.task_id)`` to keep waiting
+    instead of uploading again.
+
+    Attributes:
+        task_id: ID of the task that did not finish in time, or ``None``.
+        timeout: The timeout in seconds that was exceeded, or ``None``.
     """
 
-    def __init__(self, message: str) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        task_id: str | None = None,
+        timeout: float | None = None,
+    ) -> None:
+        """Create a TaskTimeoutError.
+
+        Args:
+            message: Human-readable error description.
+            task_id: ID of the task that did not finish in time.
+            timeout: The exceeded timeout in seconds.
+        """
         super().__init__(message, status_code=None)
+        self.task_id = task_id
+        self.timeout = timeout
 
 
 class RetryExhaustedError(PaperlessError):

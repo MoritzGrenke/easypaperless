@@ -6,21 +6,18 @@ import asyncio
 import json
 import logging
 import re
-import time
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Literal, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
-from easypaperless.exceptions import ServerResponseError, TaskTimeoutError, UploadError
+from easypaperless.exceptions import ServerResponseError, UploadError
 from easypaperless.models.documents import (
     AuditLogEntry,
     Document,
     DocumentMetadata,
     DocumentNote,
-    Task,
-    TaskStatus,
 )
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import SetPermissions
@@ -817,8 +814,11 @@ class DocumentsResource:
             when ``wait=True``.
 
         Raises:
-            ~easypaperless.exceptions.UploadError: If processing fails.
-            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded.
+            ~easypaperless.exceptions.UploadError: If processing fails;
+                ``err.task`` holds the task with paperless-ngx's ``result``
+                unaltered (e.g. to recognise a duplicate).
+            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded;
+                resume with ``client.tasks.wait(err.task_id)``.
         """
         resolver = self._core._resolver
         file_path = Path(file)
@@ -852,47 +852,14 @@ class DocumentsResource:
         if not wait:
             return task_id
 
-        interval = poll_interval if poll_interval is not None else self._core._poll_interval
-        timeout = poll_timeout if poll_timeout is not None else self._core._poll_timeout
-        return await self._poll_task(task_id, poll_interval=interval, poll_timeout=timeout)
-
-    async def _poll_task(
-        self, task_id: str, *, poll_interval: float, poll_timeout: float
-    ) -> Document:
-        start = time.monotonic()
-        deadline = start + poll_timeout
-        while time.monotonic() < deadline:
-            resp = await self._core._session.get("/tasks/", params={"task_id": task_id})
-            tasks = resp.json()
-            if not tasks:
-                await asyncio.sleep(poll_interval)
-                continue
-
-            task = Task.model_validate(tasks[0])
-            elapsed = time.monotonic() - start
-            logger.debug(
-                "Polling task %r (status=%s, elapsed=%.1fs)",
-                task_id,
-                task.status.value if task.status is not None else "unknown",
-                elapsed,
-            )
-            if task.status == TaskStatus.SUCCESS:
-                if task.related_document is None:
-                    raise UploadError(f"Task {task_id!r} succeeded but returned no document ID")
-                doc_id = int(task.related_document)
-                logger.info("Task %r succeeded, document_id=%d", task_id, doc_id)
-                return await self.get(doc_id)
-            elif task.status == TaskStatus.FAILURE:
-                logger.warning("Task %r failed: %s", task_id, task.result)
-                raise UploadError(f"Document processing failed: {task.result}")
-            elif task.status == TaskStatus.REVOKED:
-                logger.warning("Task %r was revoked", task_id)
-                raise UploadError(f"Task {task_id!r} was revoked")
-            await asyncio.sleep(poll_interval)
-
-        elapsed = time.monotonic() - start
-        logger.warning("Task %r timed out after %.1fs", task_id, elapsed)
-        raise TaskTimeoutError(f"Task {task_id!r} did not complete within {poll_timeout}s")
+        task = await self._core.tasks.wait(
+            task_id, poll_interval=poll_interval, poll_timeout=poll_timeout
+        )
+        if task.related_document is None:
+            raise UploadError(f"Task {task_id!r} succeeded but returned no document ID", task=task)
+        doc_id = int(task.related_document)
+        logger.info("Task %r produced document_id=%d", task_id, doc_id)
+        return await self.get(doc_id)
 
     # -------------------------------------------------------------------------
     # Document bulk operations

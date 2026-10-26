@@ -20,7 +20,7 @@ client.trash.restore([1, 2])          # SyncPaperlessClient
 
 - Resource attribute names are the plural, snake_case form of the endpoint:
   `documents`, `tags`, `correspondents`, `document_types`, `storage_paths`,
-  `custom_fields`, `users`, `groups`, `trash`.
+  `custom_fields`, `users`, `groups`, `trash`, `tasks`.
 - Sub-resources hang off their parent resource: `client.documents.notes`.
 - Do not add flat method names such as `list_tags` or `get_tag` on the client.
 
@@ -34,7 +34,7 @@ client.trash.restore([1, 2])          # SyncPaperlessClient
 | Update (PATCH) | `update(id, *, ...)` | `client.tags.update(3, name="y")` |
 | Delete | `delete(id)` | `client.tags.delete(3)` |
 | Bulk operation | `bulk_{action}(...)` | `client.tags.bulk_delete([1, 2])`, `client.documents.bulk_add_tag(...)` |
-| Endpoint-specific action | plain verb / noun | `documents.download()`, `documents.thumbnail()`, `documents.upload()`, `documents.history()`, `documents.get_metadata()`, `trash.restore()`, `trash.empty()` |
+| Endpoint-specific action | plain verb / noun | `documents.download()`, `documents.thumbnail()`, `documents.upload()`, `documents.history()`, `documents.get_metadata()`, `trash.restore()`, `trash.empty()`, `tasks.wait()`, `tasks.acknowledge()` |
 
 Only implement the verbs the endpoint supports (e.g. `notes` has `list`, `create`,
 `delete`; `trash` has `list`, `restore`, `empty`).

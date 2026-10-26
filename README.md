@@ -176,8 +176,8 @@ PaperlessError
 │   ├── ServerResponseError     5xx response (status_code set)
 │   └── TransportError          no response: connection refused, DNS, TLS, protocol error
 │       └── TransportTimeoutError   connect/read/write/pool timeout
-├── UploadError                 document processing task failed
-├── TaskTimeoutError            upload polling exceeded poll_timeout
+├── UploadError                 document processing task failed (.task)
+├── TaskTimeoutError            task polling exceeded poll_timeout (.task_id, .timeout)
 └── RetryExhaustedError         all retry attempts failed (last error chained as __cause__)
 ```
 
@@ -192,8 +192,8 @@ PaperlessError
 | `ServerResponseError` | HTTP 5xx, or a download returned an HTML page instead of the file | the HTTP status |
 | `TransportError` | paperless could not be reached: connection refused, DNS or TLS failure, broken connection. The original `httpx` exception is chained as `__cause__` | `None` |
 | `TransportTimeoutError` | the request timed out (the operation may still have completed on the server) | `None` |
-| `UploadError` | the processing task of an upload reports `FAILURE`/`REVOKED`, or succeeds without a document ID | `None` |
-| `TaskTimeoutError` | `upload(wait=True)` did not finish within `poll_timeout` | `None` |
+| `UploadError` | the processing task of an upload reports `FAILURE`/`REVOKED`, or succeeds without a document ID. `.task` holds the `Task` with paperless's `status` and `result` unaltered | `None` |
+| `TaskTimeoutError` | `tasks.wait()` / `upload(wait=True)` did not finish within `poll_timeout`. `.task_id` and `.timeout` are set so you can call `tasks.wait()` again | `None` |
 | `RetryExhaustedError` | all `retry_attempts` failed; `.attempts`, `.url`, last error as `__cause__` | `None` |
 | `PaperlessError` | any other HTTP error status (e.g. 409, 429) | the HTTP status |
 
@@ -332,6 +332,25 @@ print(status.database.status, status.tasks.celery_status)
 * **list()** List all documents currently in the Paperless-ngx trash bin. Returns `PagedResult[Document]`.
 * **restore()** Recover one or more trashed documents back to active status.
 * **empty()** Permanently and irreversibly delete trashed documents. **This operation cannot be undone.**
+
+### `client.tasks` — Background Tasks
+
+* **list()** List paperless-ngx background tasks, filtered by `task_id`, `status`, `task_name`, `type` or `acknowledged`. Returns `PagedResult[Task]`.
+* **get()** Fetch one task by its UUID (e.g. the ID returned by `upload(wait=False)`); raises `NotFoundError` for an unknown ID.
+* **wait()** Poll a task until it finishes and return the final `Task`. Accepts `poll_interval` / `poll_timeout` (falling back to the client defaults). `upload(wait=True)` uses it internally.
+* **acknowledge()** Mark tasks as acknowledged (by numeric `Task.id`), like "Dismiss" in the paperless UI. Returns the number of acknowledged tasks.
+
+```python
+task_id = await client.documents.upload("scan.pdf")      # returns at once; persist task_id
+try:
+    task = await client.tasks.wait(task_id, poll_timeout=120)
+    doc = await client.documents.get(int(task.related_document))
+except UploadError as err:
+    if err.task and "duplicate" in (err.task.result or "").lower():
+        ...                                               # "Not consuming scan.pdf: It is a duplicate of ..."
+except TaskTimeoutError as err:
+    ...                                                   # still running: wait again later with err.task_id
+```
 
 
 ## 📚 Documentation
