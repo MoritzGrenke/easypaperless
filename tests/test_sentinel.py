@@ -191,9 +191,7 @@ async def test_update_tag_parent_omitted_not_in_body(client, mock_router):
 
 async def test_update_correspondent_owner_none_sends_null(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_json_capture(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_json_capture(captured, CORR_DATA))
     await client.correspondents.update(1, owner=None)
     assert "owner" in captured["body"]
     assert captured["body"]["owner"] is None
@@ -201,18 +199,14 @@ async def test_update_correspondent_owner_none_sends_null(client, mock_router):
 
 async def test_update_correspondent_owner_int_sends_value(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_json_capture(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_json_capture(captured, CORR_DATA))
     await client.correspondents.update(1, owner=7)
     assert captured["body"]["owner"] == 7
 
 
 async def test_update_correspondent_owner_omitted_not_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_json_capture(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_json_capture(captured, CORR_DATA))
     await client.correspondents.update(1, name="ACME Inc.")
     assert "owner" not in captured["body"]
 
@@ -224,9 +218,7 @@ async def test_update_correspondent_owner_omitted_not_in_body(client, mock_route
 
 async def test_update_document_type_owner_none_sends_null(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/document_types/1/").mock(
-        side_effect=_json_capture(captured, DT_DATA)
-    )
+    mock_router.patch("/document_types/1/").mock(side_effect=_json_capture(captured, DT_DATA))
     await client.document_types.update(1, owner=None)
     assert "owner" in captured["body"]
     assert captured["body"]["owner"] is None
@@ -234,9 +226,7 @@ async def test_update_document_type_owner_none_sends_null(client, mock_router):
 
 async def test_update_document_type_owner_omitted_not_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/document_types/1/").mock(
-        side_effect=_json_capture(captured, DT_DATA)
-    )
+    mock_router.patch("/document_types/1/").mock(side_effect=_json_capture(captured, DT_DATA))
     await client.document_types.update(1, name="Invoice")
     assert "owner" not in captured["body"]
 
@@ -248,9 +238,7 @@ async def test_update_document_type_owner_omitted_not_in_body(client, mock_route
 
 async def test_update_storage_path_owner_none_sends_null(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/storage_paths/1/").mock(
-        side_effect=_json_capture(captured, SP_DATA)
-    )
+    mock_router.patch("/storage_paths/1/").mock(side_effect=_json_capture(captured, SP_DATA))
     await client.storage_paths.update(1, owner=None)
     assert "owner" in captured["body"]
     assert captured["body"]["owner"] is None
@@ -258,9 +246,7 @@ async def test_update_storage_path_owner_none_sends_null(client, mock_router):
 
 async def test_update_storage_path_owner_omitted_not_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/storage_paths/1/").mock(
-        side_effect=_json_capture(captured, SP_DATA)
-    )
+    mock_router.patch("/storage_paths/1/").mock(side_effect=_json_capture(captured, SP_DATA))
     await client.storage_paths.update(1, name="new-archive")
     assert "owner" not in captured["body"]
 
@@ -404,9 +390,7 @@ async def test_update_document_mixed_unset_and_none(client, mock_router):
     assert "owner" not in body
 
 
-async def test_list_documents_any_correspondent_overrides_correspondent_none(
-    client, mock_router
-):
+async def test_list_documents_any_correspondent_overrides_correspondent_none(client, mock_router):
     """any_correspondent takes priority over correspondent=None (no isnull filter added)."""
     captured: dict = {}
     corr_resp = {
@@ -444,9 +428,7 @@ async def test_update_document_none_clears_multiple_nullable_fields(client, mock
     assert body.get("archive_serial_number") is None
 
 
-async def test_list_documents_correspondent_id_not_isnull_when_value_given(
-    client, mock_router
-):
+async def test_list_documents_correspondent_id_not_isnull_when_value_given(client, mock_router):
     """Passing a real correspondent ID must NOT add isnull filter."""
     captured: dict = {}
     corr_resp = {

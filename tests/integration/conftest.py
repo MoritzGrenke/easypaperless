@@ -116,9 +116,6 @@ async def temp_documents(module_client):
         Path(path).unlink(missing_ok=True)
 
 
-
-
-
 @pytest.fixture
 def uid() -> str:
     """Short unique ID to avoid name collisions between test runs."""

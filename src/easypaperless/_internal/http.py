@@ -180,9 +180,13 @@ class HttpSession:
             async for attempt in self._tenacity_retrying:
                 with attempt:
                     result = await self._do_request(
-                        method, path,
-                        params=params, json=json, data=data,
-                        files=files, timeout=timeout,
+                        method,
+                        path,
+                        params=params,
+                        json=json,
+                        data=data,
+                        files=files,
+                        timeout=timeout,
                     )
             return result  # noqa: F821
 

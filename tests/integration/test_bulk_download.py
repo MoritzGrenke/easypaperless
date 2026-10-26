@@ -28,9 +28,7 @@ async def test_bulk_download_default_returns_zip(
 
     assert isinstance(data, bytes)
     assert len(data) > 0
-    assert data[:4] == _ZIP_MAGIC, (
-        f"Expected ZIP magic bytes {_ZIP_MAGIC!r} but got {data[:4]!r}."
-    )
+    assert data[:4] == _ZIP_MAGIC, f"Expected ZIP magic bytes {_ZIP_MAGIC!r} but got {data[:4]!r}."
     with zipfile.ZipFile(io.BytesIO(data)) as zf:
         assert len(zf.namelist()) > 0
 

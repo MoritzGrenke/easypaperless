@@ -56,6 +56,7 @@ async def test_update_document_title(client: PaperlessClient) -> None:
 # Updates with None (Issue )
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.integration
 async def test_update_document_asn_None(client: PaperlessClient, temp_documents) -> None:
     original = temp_documents[0]
@@ -67,7 +68,7 @@ async def test_update_document_asn_None(client: PaperlessClient, temp_documents)
         new_title2 = f"__integration_updated2__ {original.title}"
         updated = await client.documents.update(original.id, title=new_title2)
         assert updated.title == new_title2
-        assert updated.archive_serial_number == 666 #not changed
+        assert updated.archive_serial_number == 666  # not changed
         new_title3 = f"__integration_updated3__ {original.title}"
         updated = await client.documents.update(
             original.id, title=new_title3, archive_serial_number=None
@@ -81,7 +82,6 @@ async def test_update_document_asn_None(client: PaperlessClient, temp_documents)
             title=original.title,
             archive_serial_number=original.archive_serial_number,
         )
-
 
 
 # ---------------------------------------------------------------------------
@@ -531,5 +531,3 @@ async def test_filter_tag_by_name(client: PaperlessClient, uid: str) -> None:
     finally:
         await client.documents.update(doc.id, tags=original_tags)
         await client.tags.delete(tag.id)
-
-

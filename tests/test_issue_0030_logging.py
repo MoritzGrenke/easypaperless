@@ -78,9 +78,7 @@ async def test_auth_token_not_in_debug_logs(session, caplog):
             await session.post("/tags/", json={"name": "test"})
 
     for record in caplog.records:
-        assert API_KEY not in record.message, (
-            f"API key leaked in log message: {record.message!r}"
-        )
+        assert API_KEY not in record.message, f"API key leaked in log message: {record.message!r}"
 
 
 # ---------------------------------------------------------------------------
