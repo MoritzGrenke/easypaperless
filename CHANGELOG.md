@@ -25,6 +25,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 
+- **Unknown task status no longer raises** (`Task.status`, #0045): a status value this library does not know (e.g. from a newer paperless-ngx) used to fail with a pydantic `ValidationError` in `tasks.list()`, `tasks.get()`, `tasks.wait()` and `documents.upload(wait=True)`. Known values are still parsed as `TaskStatus`; unknown ones are kept as the plain string (`Task.status` is now `TaskStatus | str | None`). `tasks.wait()` treats an unknown status as not finished and keeps polling.
 - **Passwords no longer appear in DEBUG logs** (#0047): request bodies logged at `DEBUG` now have `password` values masked as `"***"` (recursively); other fields are still logged. Previously `users.create()` / `users.update()` wrote the plain password to the log. `PaperlessClient`, `SyncPaperlessClient` and the internal HTTP session got an explicit `repr()` showing only the URL. Tests now guarantee the API token never appears in exception messages/reprs (incl. chained `httpx` exceptions in tracebacks), object reprs or log records. README has a new security section.
 - **Configured `timeout` is now applied to regular API requests** (#0043). Requests made without a per-call timeout previously passed `timeout=None` to httpx, which disabled the timeout entirely instead of using the client's configured `timeout` (default `30.0` s). Downloads were not affected.
 

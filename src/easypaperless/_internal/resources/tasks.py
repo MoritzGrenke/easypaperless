@@ -106,7 +106,8 @@ class TasksResource:
         :exc:`~easypaperless.exceptions.TaskTimeoutError`.  A task that
         paperless-ngx does not list yet (right after an upload) is polled
         again rather than treated as missing.  The task is checked at least
-        once, even with ``poll_timeout=0``.  An unknown ``task_id`` therefore
+        once, even with ``poll_timeout=0``.  A status this library does not
+        know is treated as not finished yet.  An unknown ``task_id`` therefore
         keeps being polled until ``poll_timeout`` and then raises
         :exc:`~easypaperless.exceptions.TaskTimeoutError`.
 
@@ -144,7 +145,7 @@ class TasksResource:
             logger.debug(
                 "Polling task %r (status=%s, elapsed=%.1fs)",
                 task_id,
-                status.value if status is not None else "unknown",
+                status if status is not None else "unknown",
                 elapsed,
             )
             if task is not None and status == TaskStatus.SUCCESS:
