@@ -28,6 +28,27 @@ _DEFAULT_RETRY_ON: tuple[type[Exception], ...] = (
 )
 
 
+# Request-body keys whose values are never written to the log (#0047).
+_SECRET_KEYS = frozenset({"password"})
+_MASK = "***"
+
+
+def _mask_secrets(value: Any) -> Any:
+    """Return a copy of *value* with secret fields replaced by ``"***"``.
+
+    Walks dicts and lists recursively; the original object (which is sent to
+    the server) is left untouched. Only used for DEBUG logging.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _MASK if str(key).lower() in _SECRET_KEYS else _mask_secrets(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_mask_secrets(item) for item in value]
+    return value
+
+
 @dataclass
 class _PagedRaw:
     """Internal container for a raw paged API response."""
@@ -64,6 +85,10 @@ class HttpSession:
         )
         self._tenacity_retrying = tenacity_retrying
         self._transport = transport
+
+    def __repr__(self) -> str:
+        # Never include the API token (#0047).
+        return f"{type(self).__name__}(base_url={self._base_url!r})"
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
@@ -139,9 +164,9 @@ class HttpSession:
     ) -> httpx.Response:
         if logger.isEnabledFor(logging.DEBUG):
             if json is not None:
-                logger.debug("%s %s body=%s", method.upper(), path, json)
+                logger.debug("%s %s body=%s", method.upper(), path, _mask_secrets(json))
             elif data is not None:
-                logger.debug("%s %s data=%s", method.upper(), path, data)
+                logger.debug("%s %s data=%s", method.upper(), path, _mask_secrets(data))
             elif files is not None:
                 logger.debug("%s %s <multipart/form-data>", method.upper(), path)
             else:
