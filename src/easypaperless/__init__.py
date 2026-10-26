@@ -9,12 +9,18 @@ from easypaperless import resources as resources  # noqa: F401
 from easypaperless._internal.sentinel import UNSET, Unset
 from easypaperless.client import PaperlessClient
 from easypaperless.exceptions import (
+    AuthenticationError,
     AuthError,
+    BadRequestError,
     NotFoundError,
     PaperlessError,
+    PermissionDeniedError,
     RetryExhaustedError,
     ServerError,
+    ServerResponseError,
     TaskTimeoutError,
+    TransportError,
+    TransportTimeoutError,
     UploadError,
     ValidationError,
 )
@@ -82,9 +88,15 @@ __all__ = [
     # Exceptions
     "PaperlessError",
     "AuthError",
+    "AuthenticationError",
+    "PermissionDeniedError",
+    "BadRequestError",
     "NotFoundError",
     "ValidationError",
     "ServerError",
+    "ServerResponseError",
+    "TransportError",
+    "TransportTimeoutError",
     "UploadError",
     "TaskTimeoutError",
     "RetryExhaustedError",

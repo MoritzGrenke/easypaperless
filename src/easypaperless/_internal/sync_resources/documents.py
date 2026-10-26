@@ -452,7 +452,7 @@ class SyncDocumentsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
-            ~easypaperless.exceptions.ServerError: If the server returns an
+            ~easypaperless.exceptions.ServerResponseError: If the server returns an
                 HTML page (e.g. an auth redirect) instead of the image.
         """
         return cast(bytes, self._run(self._async_documents.thumbnail(id)))

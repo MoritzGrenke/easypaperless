@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Literal, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
-from easypaperless.exceptions import ServerError, TaskTimeoutError, UploadError
+from easypaperless.exceptions import ServerResponseError, TaskTimeoutError, UploadError
 from easypaperless.models.documents import (
     AuditLogEntry,
     Document,
@@ -737,10 +737,10 @@ class DocumentsResource:
         resp = await self._core._session.get_download(path)
         content_type = resp.headers.get("content-type", "")
         if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerError(
+            raise ServerResponseError(
                 f"Download returned an HTML page (content-type: {content_type!r}). "
                 "The server redirected to a login page even after re-attaching auth.",
-                status_code=None,
+                status_code=resp.status_code,
             )
         return resp.content
 
@@ -756,17 +756,17 @@ class DocumentsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
-            ~easypaperless.exceptions.ServerError: If the server returns an
+            ~easypaperless.exceptions.ServerResponseError: If the server returns an
                 HTML page (e.g. an auth redirect) instead of the image.
         """
         logger.info("Fetching thumbnail for document id=%d", id)
         resp = await self._core._session.get_download(f"/documents/{id}/thumb/")
         content_type = resp.headers.get("content-type", "")
         if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerError(
+            raise ServerResponseError(
                 f"Thumbnail returned an HTML page (content-type: {content_type!r}). "
                 "The server redirected to a login page even after re-attaching auth.",
-                status_code=None,
+                status_code=resp.status_code,
             )
         return resp.content
 
