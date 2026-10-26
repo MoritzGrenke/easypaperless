@@ -23,6 +23,7 @@ from easypaperless._internal.sync_resources.trash import SyncTrashResource
 from easypaperless._internal.sync_resources.users import SyncUsersResource
 from easypaperless.client import PaperlessClient
 from easypaperless.models.system_status import SystemStatus
+from easypaperless.models.ui_settings import UiSettings
 
 _T = TypeVar("_T")
 
@@ -120,7 +121,8 @@ class SyncPaperlessClient(_SyncCore):
       see `easypaperless.resources.SyncTasksResource`
 
     Server information is available directly on the client:
-    :meth:`server_version` (connection check) and :meth:`system_status`.
+    :meth:`server_version` (connection check), :meth:`system_status` and
+    :meth:`ui_settings` (current user and effective permissions).
 
     All methods are synchronous wrappers around the async
     :class:`~easypaperless.client.PaperlessClient`.  Operations run on a
@@ -241,3 +243,35 @@ class SyncPaperlessClient(_SyncCore):
             'OK'
         """
         return self._run(self._async_client.system_status())
+
+    def ui_settings(self) -> UiSettings:
+        """Return the token user, their effective permissions and server settings.
+
+        Sends one authenticated ``GET /api/ui_settings/``.  This is the only
+        paperless-ngx endpoint that reports the permissions the token's user
+        effectively has (granted directly and via groups), so it can tell a
+        service which permission is missing instead of an unexplained 403.
+
+        The endpoint itself requires the ``view_uisettings`` permission
+        (directly or via a group); superusers always have it.
+
+        Returns:
+            A :class:`~easypaperless.models.ui_settings.UiSettings` with
+            ``user``, ``permissions`` (bare codenames such as
+            ``"add_document"``) and ``settings``.  Use
+            :meth:`~easypaperless.models.ui_settings.UiSettings.missing_permissions`
+            to compare against the permissions you need.
+
+        Raises:
+            ~easypaperless.exceptions.AuthenticationError: The token was
+                refused (401).
+            ~easypaperless.exceptions.PermissionDeniedError: The token's user
+                lacks the ``view_uisettings`` permission (403).
+            ~easypaperless.exceptions.TransportError: The server could not be
+                reached (connection refused, DNS, TLS, timeout).
+
+        Example:
+            >>> client.ui_settings().missing_permissions({"add_document", "add_note"})
+            {'add_note'}
+        """
+        return self._run(self._async_client.ui_settings())
