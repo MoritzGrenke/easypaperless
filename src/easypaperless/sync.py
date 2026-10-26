@@ -63,6 +63,7 @@ class _SyncCore:
     def close(self) -> None:
         """Close the underlying HTTP connection pool and stop the event loop.
 
+        Stops the internal loop and joins its thread before returning.
         Safe to call multiple times — subsequent calls are no-ops.
         """
         if self._loop.is_closed():
@@ -115,10 +116,20 @@ class SyncPaperlessClient(_SyncCore):
             tags = client.tags.list()
             docs = client.documents.list(search="invoice")
 
+    Worker threads:
+        It is safe to construct and use a ``SyncPaperlessClient`` from a
+        worker thread while another event loop runs in the main thread (e.g.
+        a synchronous worker beside FastAPI/uvicorn, or via
+        ``asyncio.to_thread``).  Each client owns its own private loop thread.
+        :meth:`close` (or leaving the ``with`` block) closes the connection
+        pool, stops that loop and joins its thread; calling it again is a
+        no-op.
+
     Note:
-        Cannot be used inside an already-running event loop (e.g. Jupyter
-        notebooks).  Use :class:`~easypaperless.client.PaperlessClient`
-        directly in those environments.
+        Cannot be called directly from code running *inside* an event loop
+        (e.g. Jupyter notebooks or an ``async def`` body) — that would block
+        the loop.  Use :class:`~easypaperless.client.PaperlessClient` there,
+        or move the sync calls into a worker thread.
     """
 
     def __init__(self, url: str, api_token: str, **kwargs: Any) -> None:
@@ -132,11 +143,19 @@ class SyncPaperlessClient(_SyncCore):
             **kwargs: Additional keyword arguments forwarded to
                 :class:`~easypaperless.client.PaperlessClient` (e.g.
                 ``poll_interval``, ``poll_timeout``, ``retry_attempts``,
-                ``retry_backoff``, ``retry_on``, ``tenacity_retrying``).
+                ``retry_backoff``, ``retry_on``, ``tenacity_retrying``,
+                ``transport``).
                 When using ``tenacity_retrying``, pass a
                 ``tenacity.AsyncRetrying`` instance — the sync
                 ``tenacity.Retrying`` is not compatible because all requests
                 run on an internal async event loop.
+
+                ``transport`` (``httpx.AsyncBaseTransport | None``): custom or
+                mock transport for the internal ``httpx.AsyncClient``; must be
+                an *async* transport.  An ``httpx.MockTransport`` works — its
+                handler is invoked on the client's internal loop thread.
+                Auth, base URL, timeout and retries stay under easypaperless's
+                control.
         """
         super().__init__(url, api_token, **kwargs)
 

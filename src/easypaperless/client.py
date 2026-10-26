@@ -5,6 +5,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import httpx
+
 from easypaperless._internal.http import HttpSession
 from easypaperless._internal.resolvers import NameResolver
 from easypaperless._internal.resources.correspondents import CorrespondentsResource
@@ -46,6 +48,7 @@ class _ClientCore:
         retry_backoff: float = 1.0,
         retry_on: tuple[type[Exception], ...] | None = None,
         tenacity_retrying: Any = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._session = HttpSession(
             base_url=url,
@@ -55,6 +58,7 @@ class _ClientCore:
             retry_backoff=retry_backoff,
             retry_on=retry_on,
             tenacity_retrying=tenacity_retrying,
+            transport=transport,
         )
         self._resolver = NameResolver(self._session)
         self._poll_interval = poll_interval
@@ -210,6 +214,7 @@ class PaperlessClient(_ClientCore):
         retry_backoff: float = 1.0,
         retry_on: tuple[type[Exception], ...] | None = None,
         tenacity_retrying: Any = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         """Create an async paperless-ngx client.
 
@@ -246,6 +251,22 @@ class PaperlessClient(_ClientCore):
                 instead.  Must be ``AsyncRetrying`` — the sync
                 ``tenacity.Retrying`` is not compatible with the async HTTP
                 layer used internally.
+            transport: Optional ``httpx.AsyncBaseTransport`` passed to the
+                internal ``httpx.AsyncClient`` — e.g. an ``httpx.MockTransport``
+                for tests, or an ``httpx.AsyncHTTPTransport`` with custom proxy,
+                local address or TLS settings.  easypaperless still sets the
+                ``Authorization`` header, base URL, timeout, redirect handling
+                and retries.  Default: ``None`` (httpx's default transport).
+
+        Example:
+            Testing with a mock transport::
+
+                def handler(request: httpx.Request) -> httpx.Response:
+                    return httpx.Response(200, json={"count": 0, "next": None,
+                                                     "previous": None, "results": []})
+
+                client = PaperlessClient(url="http://paperless.test", api_token="t",
+                                         transport=httpx.MockTransport(handler))
         """
         super().__init__(
             url,
@@ -257,6 +278,7 @@ class PaperlessClient(_ClientCore):
             retry_backoff=retry_backoff,
             retry_on=retry_on,
             tenacity_retrying=tenacity_retrying,
+            transport=transport,
         )
 
     async def __aenter__(self) -> PaperlessClient:
