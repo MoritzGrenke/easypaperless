@@ -195,7 +195,8 @@ Follow how `users` (#0035) and `trash` (#0036) were added:
 Binding decisions for the 0.7.0 milestone (#0043–#0052):
 
 - **Tests**: new tests use the injectable `httpx.MockTransport` (`transport=` keyword,
-  #0043) and the shared helper in `tests/`, not respx. Existing respx tests stay.
+  #0043) and the shared helper `tests/_transport.py` (`FakePaperless`), not respx.
+  Existing respx tests stay.
 - **No retry for creating requests**: `HttpSession.request()` / `post()` take an internal
   `retry: bool = True`. Requests that create something (`documents.upload`,
   `_create_resource` i.e. every `create()`, `notes.create`) pass `retry=False`, for both
