@@ -8,83 +8,15 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, List, Literal, cast
 
 from easypaperless._internal.sentinel import UNSET, Unset
-from easypaperless.models.documents import AuditLogEntry, Document, DocumentMetadata, DocumentNote
+from easypaperless._internal.sync_resources.notes import SyncNotesResource
+from easypaperless.models.documents import AuditLogEntry, Document, DocumentMetadata
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import SetPermissions
 
 if TYPE_CHECKING:
-    from easypaperless._internal.resources.documents import DocumentsResource, NotesResource
+    from easypaperless._internal.resources.documents import DocumentsResource
 
-
-class SyncNotesResource:
-    """Sync accessor for document notes: ``client.documents.notes``."""
-
-    def __init__(self, async_notes: NotesResource, run: Any) -> None:
-        self._async_notes = async_notes
-        self._run = run
-
-    def list(
-        self,
-        document_id: int,
-        *,
-        page: int | None = None,
-        page_size: int | None = None,
-    ) -> PagedResult[DocumentNote]:
-        """Fetch notes attached to a document.
-
-        When ``page`` is ``None`` (the default), all pages are fetched
-        automatically and ``next`` / ``previous`` in the returned
-        :class:`~easypaperless.models.paged_result.PagedResult` are always
-        ``None``.  When ``page`` is set to a specific integer, only that one
-        page is fetched and ``next`` / ``previous`` contain the raw API values.
-
-        Args:
-            document_id: Numeric ID of the document whose notes to retrieve.
-            page: Return only this specific page (1-based).
-            page_size: Number of results per page.
-
-        Returns:
-            :class:`~easypaperless.models.paged_result.PagedResult` of
-            :class:`~easypaperless.models.documents.DocumentNote` objects,
-            ordered by creation time.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        return cast(
-            PagedResult[DocumentNote],
-            self._run(self._async_notes.list(document_id, page=page, page_size=page_size)),
-        )
-
-    def create(self, document_id: int, *, note: str) -> DocumentNote:
-        """Create a new note on a document.
-
-        Args:
-            document_id: Numeric ID of the document to annotate.
-            note: Text content of the note.
-
-        Returns:
-            The newly created :class:`~easypaperless.models.documents.DocumentNote`.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        return cast(DocumentNote, self._run(self._async_notes.create(document_id, note=note)))
-
-    def delete(self, document_id: int, note_id: int) -> None:
-        """Delete a note from a document.
-
-        Args:
-            document_id: Numeric ID of the document that owns the note.
-            note_id: Numeric ID of the note to delete.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document or note
-                exists with the given IDs.
-        """
-        self._run(self._async_notes.delete(document_id, note_id))
+__all__ = ["SyncDocumentsResource", "SyncNotesResource"]
 
 
 class SyncDocumentsResource:
@@ -284,7 +216,19 @@ class SyncDocumentsResource:
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
             modified_until: Only documents modified on or before this date/time.
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
-            checksum: MD5 checksum of the original file (exact match).
+            checksum: MD5 checksum (hex) of the original uploaded file, matched
+                exactly but case-insensitively (sent as ``checksum__iexact``).
+                Documents in the trash are **not** found, yet paperless-ngx
+                still rejects a re-upload of the same file as a duplicate.  To
+                detect that case, catch the
+                :exc:`~easypaperless.exceptions.UploadError` of
+                ``upload(wait=True)`` (or of ``tasks.wait()``): ``err.task.result``
+                contains ``": It is a duplicate of "`` and ends in
+                ``"Note: existing document is in the trash."``, and
+                ``err.task.related_document`` is ``None`` (for a live duplicate
+                it is the existing document's ID).  ``client.trash.list()``
+                shows the trashed document; ``client.trash.restore()`` brings
+                it back.
             page_size: Number of results per API page.  Default: ``25``.
             page: Return only this specific page (1-based).
             ordering: Field name to sort by.
@@ -387,6 +331,9 @@ class SyncDocumentsResource:
             set_permissions: Explicit view/change permission sets.
                 Pass ``None`` to clear all permissions (overwrite with empty).
                 Omit (or pass :data:`~easypaperless.UNSET`) to leave unchanged.
+                The given sets replace the document's current view and change
+                users and groups.  Together with ``owner`` everything goes out
+                in one PATCH, which paperless-ngx applies as a whole.
             remove_inbox_tags: When ``True``, removes all inbox tags from the document.
 
         Returns:
@@ -452,15 +399,18 @@ class SyncDocumentsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
-            ~easypaperless.exceptions.ServerError: If the server returns an
+            ~easypaperless.exceptions.ServerResponseError: If the server returns an
                 HTML page (e.g. an auth redirect) instead of the image.
         """
         return cast(bytes, self._run(self._async_documents.thumbnail(id)))
 
     def upload(
         self,
-        file: str | Path,
+        file: str | Path | bytes,
         *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        request_timeout: float | None = None,
         title: str | Unset = UNSET,
         created: date | str | None = None,
         correspondent: int | str | None | Unset = UNSET,
@@ -475,8 +425,29 @@ class SyncDocumentsResource:
     ) -> str | Document:
         """Upload a document to paperless-ngx.
 
+        The upload request is never retried automatically, whatever the
+        client's ``retry_attempts`` / ``tenacity_retrying`` settings: if the
+        connection fails after paperless-ngx has accepted the file, a retry
+        would create a duplicate.  A failed upload raises (e.g.
+        :exc:`~easypaperless.exceptions.TransportTimeoutError`) so you can
+        decide whether to check for the document and upload again.
+
         Args:
-            file: Path to the file to upload.
+            file: Path to the file to upload (``str`` or :class:`~pathlib.Path`),
+                or the file content as ``bytes``.  Bytes are sent directly; no
+                temporary file is written.
+            filename: File name sent to paperless-ngx.  Required when *file* is
+                ``bytes`` (omitting it raises
+                :exc:`~easypaperless.exceptions.ValidationError` before any
+                request).  For a path, overrides the name taken from the path.
+            content_type: MIME type of the file part, sent as given (e.g.
+                ``"application/pdf"``).  When omitted, it is guessed from the
+                file name as before.  paperless-ngx detects the file type from
+                the bytes and does not rely on this value to accept the file.
+            request_timeout: HTTP timeout in seconds for the upload request
+                only, overriding the client's ``timeout`` for this call.  Does
+                not affect task polling (see ``poll_timeout``).  When omitted,
+                the client's ``timeout`` applies.
             title: Title to assign to the document.
             created: Creation date as an ISO-8601 string (``"YYYY-MM-DD"``) or a
                 :class:`~datetime.date` object.
@@ -504,14 +475,28 @@ class SyncDocumentsResource:
             when ``wait=True``.
 
         Raises:
-            ~easypaperless.exceptions.UploadError: If processing fails.
-            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded.
+            ~easypaperless.exceptions.ValidationError: If *file* is ``bytes``
+                and no *filename* is given.
+            ~easypaperless.exceptions.BadRequestError: If paperless-ngx rejects
+                the file before processing starts, e.g. an unsupported file
+                type or an empty file (``err.field_errors["document"]``).
+            ~easypaperless.exceptions.UploadError: If processing fails;
+                ``err.task`` holds the task with paperless-ngx's ``result``
+                unaltered.  For a duplicate, ``err.task.result`` contains
+                ``": It is a duplicate of "`` and ``err.task.related_document``
+                is the existing document's ID (``None`` if that document is
+                in the trash).
+            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded;
+                resume with ``client.tasks.wait(err.task_id)``.
         """
         return cast(
             str | Document,
             self._run(
                 self._async_documents.upload(
                     file,
+                    filename=filename,
+                    content_type=content_type,
+                    request_timeout=request_timeout,
                     title=title,
                     created=created,
                     correspondent=correspondent,

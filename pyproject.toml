@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "easypaperless"
-version = "0.6.0"
+version = "0.7.0"
 description = "A Python API wrapper for paperless-ngx"
 readme = "README.md"
 license = { text = "MIT" }
@@ -20,6 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "httpx>=0.27",
@@ -43,9 +44,10 @@ dev = [
     "pytest-asyncio>=0.23",
     "respx>=0.21",
     "pytest-cov",
-    "ruff>=0.4",
-    "mypy>=1.10",
+    "ruff>=0.15,<0.16",
+    "mypy>=1.19,<2",
     "python-dotenv>=1.0",
+    "tenacity>=8.2",
 ]
 
 [tool.hatch.build.targets.wheel]

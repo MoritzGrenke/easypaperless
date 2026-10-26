@@ -6,21 +6,20 @@ import asyncio
 import json
 import logging
 import re
-import time
 from collections.abc import Callable
 from datetime import date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, List, Literal, cast
+from typing import TYPE_CHECKING, Any, List, Literal
 
+import httpx
+
+from easypaperless._internal.resources.notes import NotesResource
 from easypaperless._internal.sentinel import UNSET, Unset
-from easypaperless.exceptions import ServerError, TaskTimeoutError, UploadError
+from easypaperless.exceptions import ServerResponseError, UploadError, ValidationError
 from easypaperless.models.documents import (
     AuditLogEntry,
     Document,
     DocumentMetadata,
-    DocumentNote,
-    Task,
-    TaskStatus,
 )
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import SetPermissions
@@ -29,6 +28,8 @@ if TYPE_CHECKING:
     from easypaperless.client import _ClientCore
 
 logger = logging.getLogger(__name__)
+
+__all__ = ["DocumentsResource", "NotesResource"]
 
 _DATETIME_STR_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T")
 
@@ -40,136 +41,23 @@ _SEARCH_MODE_MAP = {
 }
 
 
-class NotesResource:
-    """Accessor for document notes: ``client.documents.notes``."""
+def _binary_content(resp: httpx.Response, what: str) -> bytes:
+    """Return the body of a binary download, rejecting an HTML page.
 
-    def __init__(self, core: _ClientCore) -> None:
-        self._core = core
+    A reverse proxy or auth layer may answer a download with a login page
+    (HTTP 200, HTML) instead of the file.
 
-    async def list(
-        self,
-        document_id: int,
-        *,
-        page: int | None = None,
-        page_size: int | None = None,
-    ) -> PagedResult[DocumentNote]:
-        """Fetch notes attached to a document.
-
-        When ``page`` is ``None`` (the default), all pages are fetched
-        automatically and ``next`` / ``previous`` in the returned
-        :class:`~easypaperless.models.paged_result.PagedResult` are always
-        ``None``.  When ``page`` is set to a specific integer, only that one
-        page is fetched and ``next`` / ``previous`` contain the raw API values.
-
-        Args:
-            document_id: Numeric ID of the document whose notes to retrieve.
-            page: Return only this specific page (1-based).
-            page_size: Number of results per page.
-
-        Returns:
-            :class:`~easypaperless.models.paged_result.PagedResult` of
-            :class:`~easypaperless.models.documents.DocumentNote` objects,
-            ordered by creation time.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        logger.info("Listing notes for document id=%d", document_id)
-        path = f"/documents/{document_id}/notes/"
-        params: dict[str, Any] = {}
-        if page_size is not None:
-            params["page_size"] = page_size
-        if page is not None:
-            params["page"] = page
-
-        resp = await self._core._session.get(path, params=params or None)
-        data = resp.json()
-
-        if isinstance(data, list):
-            # The paperless-ngx notes endpoint returns a plain JSON array rather
-            # than a paginated envelope.  Build a synthetic PagedResult so callers
-            # always receive a consistent return type regardless of API version.
-            notes = [DocumentNote.model_validate(item) for item in data]
-            note_ids = [n.id for n in notes if n.id is not None]
-            all_ids: list[int] | None = note_ids if note_ids else None
-            return PagedResult(
-                count=len(notes),
-                next=None,
-                previous=None,
-                all=all_ids,
-                results=notes,
-            )
-
-        # Paginated dict envelope — forward-compatible with potential future API changes.
-        items: list[Any] = list(data.get("results", []))
-        count: int = data.get("count", 0)
-        page_all_ids: list[int] | None = data.get("all")
-
-        if page is None:
-            next_url: str | None = data.get("next")
-            while next_url:
-                next_url = self._core._session._normalise_next_url(next_url)
-                page_resp = await self._core._session.get(next_url)
-                page_data = page_resp.json()
-                items.extend(page_data.get("results", []))
-                next_url = page_data.get("next")
-            return PagedResult(
-                count=count,
-                next=None,
-                previous=None,
-                all=page_all_ids,
-                results=[DocumentNote.model_validate(item) for item in items],
-            )
-
-        return cast(
-            PagedResult[DocumentNote],
-            PagedResult(
-                count=count,
-                next=data.get("next"),
-                previous=data.get("previous"),
-                all=page_all_ids,
-                results=[DocumentNote.model_validate(item) for item in items],
-            ),
+    Raises:
+        ~easypaperless.exceptions.ServerResponseError: If the response is HTML.
+    """
+    content_type = resp.headers.get("content-type", "")
+    if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
+        raise ServerResponseError(
+            f"{what} returned an HTML page (content-type: {content_type!r}). "
+            "The server redirected to a login page even after re-attaching auth.",
+            status_code=resp.status_code,
         )
-
-    async def create(self, document_id: int, *, note: str) -> DocumentNote:
-        """Create a new note on a document.
-
-        Args:
-            document_id: Numeric ID of the document to annotate.
-            note: Text content of the note.
-
-        Returns:
-            The newly created :class:`~easypaperless.models.documents.DocumentNote`.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document exists
-                with that ID.
-        """
-        logger.info("Creating note for document id=%d", document_id)
-        resp = await self._core._session.post(
-            f"/documents/{document_id}/notes/",
-            json={"note": note},
-        )
-        data = resp.json()
-        if isinstance(data, list):
-            return DocumentNote.model_validate(data[-1])
-        return DocumentNote.model_validate(data)
-
-    async def delete(self, document_id: int, note_id: int) -> None:
-        """Delete a note from a document.
-
-        Args:
-            document_id: Numeric ID of the document that owns the note.
-            note_id: Numeric ID of the note to delete.
-
-        Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document or note
-                exists with the given IDs.
-        """
-        logger.info("Deleting note id=%d from document id=%d", note_id, document_id)
-        await self._core._session.delete(f"/documents/{document_id}/notes/", params={"id": note_id})
+    return resp.content
 
 
 class DocumentsResource:
@@ -424,7 +312,19 @@ class DocumentsResource:
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
             modified_until: Only documents modified on or before this date/time.
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
-            checksum: MD5 checksum of the original file (exact match).
+            checksum: MD5 checksum (hex) of the original uploaded file, matched
+                exactly but case-insensitively (sent as ``checksum__iexact``).
+                Documents in the trash are **not** found, yet paperless-ngx
+                still rejects a re-upload of the same file as a duplicate.  To
+                detect that case, catch the
+                :exc:`~easypaperless.exceptions.UploadError` of
+                ``upload(wait=True)`` (or of ``tasks.wait()``): ``err.task.result``
+                contains ``": It is a duplicate of "`` and ends in
+                ``"Note: existing document is in the trash."``, and
+                ``err.task.related_document`` is ``None`` (for a live duplicate
+                it is the existing document's ID).  ``client.trash.list()``
+                shows the trashed document; ``client.trash.restore()`` brings
+                it back.
             page_size: Number of results per API page.  Default: ``25``.
             page: Return only this specific page (1-based).
             ordering: Field name to sort by.
@@ -651,6 +551,9 @@ class DocumentsResource:
             set_permissions: Explicit view/change permission sets.
                 Pass ``None`` to clear all permissions (overwrite with empty).
                 Omit (or pass :data:`~easypaperless.UNSET`) to leave unchanged.
+                The given sets replace the document's current view and change
+                users and groups.  Together with ``owner`` everything goes out
+                in one PATCH, which paperless-ngx applies as a whole.
             remove_inbox_tags: When ``True``, removes all inbox tags from the document.
 
         Returns:
@@ -735,14 +638,7 @@ class DocumentsResource:
         if original:
             path += "?original=true"
         resp = await self._core._session.get_download(path)
-        content_type = resp.headers.get("content-type", "")
-        if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerError(
-                f"Download returned an HTML page (content-type: {content_type!r}). "
-                "The server redirected to a login page even after re-attaching auth.",
-                status_code=None,
-            )
-        return resp.content
+        return _binary_content(resp, "Download")
 
     async def thumbnail(self, id: int) -> bytes:
         """Fetch the thumbnail image of a document.
@@ -756,24 +652,20 @@ class DocumentsResource:
         Raises:
             ~easypaperless.exceptions.NotFoundError: If no document exists
                 with that ID.
-            ~easypaperless.exceptions.ServerError: If the server returns an
+            ~easypaperless.exceptions.ServerResponseError: If the server returns an
                 HTML page (e.g. an auth redirect) instead of the image.
         """
         logger.info("Fetching thumbnail for document id=%d", id)
         resp = await self._core._session.get_download(f"/documents/{id}/thumb/")
-        content_type = resp.headers.get("content-type", "")
-        if "text/html" in content_type or resp.content[:9].lower().startswith(b"<!doctype"):
-            raise ServerError(
-                f"Thumbnail returned an HTML page (content-type: {content_type!r}). "
-                "The server redirected to a login page even after re-attaching auth.",
-                status_code=None,
-            )
-        return resp.content
+        return _binary_content(resp, "Thumbnail")
 
     async def upload(
         self,
-        file: str | Path,
+        file: str | Path | bytes,
         *,
+        filename: str | None = None,
+        content_type: str | None = None,
+        request_timeout: float | None = None,
         title: str | Unset = UNSET,
         created: date | str | None = None,
         correspondent: int | str | None | Unset = UNSET,
@@ -788,8 +680,29 @@ class DocumentsResource:
     ) -> str | Document:
         """Upload a document to paperless-ngx.
 
+        The upload request is never retried automatically, whatever the
+        client's ``retry_attempts`` / ``tenacity_retrying`` settings: if the
+        connection fails after paperless-ngx has accepted the file, a retry
+        would create a duplicate.  A failed upload raises (e.g.
+        :exc:`~easypaperless.exceptions.TransportTimeoutError`) so you can
+        decide whether to check for the document and upload again.
+
         Args:
-            file: Path to the file to upload.
+            file: Path to the file to upload (``str`` or :class:`~pathlib.Path`),
+                or the file content as ``bytes``.  Bytes are sent directly; no
+                temporary file is written.
+            filename: File name sent to paperless-ngx.  Required when *file* is
+                ``bytes`` (omitting it raises
+                :exc:`~easypaperless.exceptions.ValidationError` before any
+                request).  For a path, overrides the name taken from the path.
+            content_type: MIME type of the file part, sent as given (e.g.
+                ``"application/pdf"``).  When omitted, it is guessed from the
+                file name as before.  paperless-ngx detects the file type from
+                the bytes and does not rely on this value to accept the file.
+            request_timeout: HTTP timeout in seconds for the upload request
+                only, overriding the client's ``timeout`` for this call.  Does
+                not affect task polling (see ``poll_timeout``).  When omitted,
+                the client's ``timeout`` applies.
             title: Title to assign to the document.
             created: Creation date as an ISO-8601 string (``"YYYY-MM-DD"``) or a
                 :class:`~datetime.date` object.
@@ -817,13 +730,31 @@ class DocumentsResource:
             when ``wait=True``.
 
         Raises:
-            ~easypaperless.exceptions.UploadError: If processing fails.
-            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded.
+            ~easypaperless.exceptions.ValidationError: If *file* is ``bytes``
+                and no *filename* is given.
+            ~easypaperless.exceptions.BadRequestError: If paperless-ngx rejects
+                the file before processing starts, e.g. an unsupported file
+                type or an empty file (``err.field_errors["document"]``).
+            ~easypaperless.exceptions.UploadError: If processing fails;
+                ``err.task`` holds the task with paperless-ngx's ``result``
+                unaltered.  For a duplicate, ``err.task.result`` contains
+                ``": It is a duplicate of "`` and ``err.task.related_document``
+                is the existing document's ID (``None`` if that document is
+                in the trash).
+            ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded;
+                resume with ``client.tasks.wait(err.task_id)``.
         """
         resolver = self._core._resolver
-        file_path = Path(file)
-        file_bytes = file_path.read_bytes()
-        logger.info("Uploading %r (%d bytes)", file_path.name, len(file_bytes))
+        if isinstance(file, bytes):
+            if not filename:
+                raise ValidationError("filename is required when uploading from bytes")
+            file_bytes = file
+            upload_name = filename
+        else:
+            file_path = Path(file)
+            file_bytes = file_path.read_bytes()
+            upload_name = filename if filename is not None else file_path.name
+        logger.info("Uploading %r (%d bytes)", upload_name, len(file_bytes))
 
         data: dict[str, Any] = {}
         if not isinstance(title, Unset):
@@ -844,55 +775,34 @@ class DocumentsResource:
         if custom_fields is not None:
             data["custom_fields"] = json.dumps(custom_fields)
 
-        files = {"document": (file_path.name, file_bytes)}
-        resp = await self._core._session.post("/documents/post_document/", data=data, files=files)
+        # Without content_type httpx derives it from the file name (previous behaviour).
+        document_part: tuple[str, bytes] | tuple[str, bytes, str] = (
+            (upload_name, file_bytes)
+            if content_type is None
+            else (upload_name, file_bytes, content_type)
+        )
+        files = {"document": document_part}
+        resp = await self._core._session.post(
+            "/documents/post_document/",
+            data=data,
+            files=files,
+            timeout=request_timeout,
+            retry=False,  # a retry after a lost response would upload a duplicate
+        )
         task_id: str = resp.text.strip('"')
         logger.debug("Upload accepted, task_id=%r", task_id)
 
         if not wait:
             return task_id
 
-        interval = poll_interval if poll_interval is not None else self._core._poll_interval
-        timeout = poll_timeout if poll_timeout is not None else self._core._poll_timeout
-        return await self._poll_task(task_id, poll_interval=interval, poll_timeout=timeout)
-
-    async def _poll_task(
-        self, task_id: str, *, poll_interval: float, poll_timeout: float
-    ) -> Document:
-        start = time.monotonic()
-        deadline = start + poll_timeout
-        while time.monotonic() < deadline:
-            resp = await self._core._session.get("/tasks/", params={"task_id": task_id})
-            tasks = resp.json()
-            if not tasks:
-                await asyncio.sleep(poll_interval)
-                continue
-
-            task = Task.model_validate(tasks[0])
-            elapsed = time.monotonic() - start
-            logger.debug(
-                "Polling task %r (status=%s, elapsed=%.1fs)",
-                task_id,
-                task.status.value if task.status is not None else "unknown",
-                elapsed,
-            )
-            if task.status == TaskStatus.SUCCESS:
-                if task.related_document is None:
-                    raise UploadError(f"Task {task_id!r} succeeded but returned no document ID")
-                doc_id = int(task.related_document)
-                logger.info("Task %r succeeded, document_id=%d", task_id, doc_id)
-                return await self.get(doc_id)
-            elif task.status == TaskStatus.FAILURE:
-                logger.warning("Task %r failed: %s", task_id, task.result)
-                raise UploadError(f"Document processing failed: {task.result}")
-            elif task.status == TaskStatus.REVOKED:
-                logger.warning("Task %r was revoked", task_id)
-                raise UploadError(f"Task {task_id!r} was revoked")
-            await asyncio.sleep(poll_interval)
-
-        elapsed = time.monotonic() - start
-        logger.warning("Task %r timed out after %.1fs", task_id, elapsed)
-        raise TaskTimeoutError(f"Task {task_id!r} did not complete within {poll_timeout}s")
+        task = await self._core.tasks.wait(
+            task_id, poll_interval=poll_interval, poll_timeout=poll_timeout
+        )
+        if task.related_document is None:
+            raise UploadError(f"Task {task_id!r} succeeded but returned no document ID", task=task)
+        doc_id = int(task.related_document)
+        logger.info("Task %r produced document_id=%d", task_id, doc_id)
+        return await self.get(doc_id)
 
     # -------------------------------------------------------------------------
     # Document bulk operations

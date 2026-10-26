@@ -77,33 +77,23 @@ def _capturing_body(captured: dict, response_data: dict, *, status: int = 200):
 # ===========================================================================
 
 
-async def test_update_correspondent_set_permissions_sends_serialized_payload(
-    client, mock_router
-):
+async def test_update_correspondent_set_permissions_sends_serialized_payload(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_capturing_body(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_capturing_body(captured, CORR_DATA))
     await client.correspondents.update(1, set_permissions=PERMS)
     assert captured["body"]["set_permissions"] == PERMS_DICT
 
 
 async def test_update_correspondent_set_permissions_unset_not_sent(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_capturing_body(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_capturing_body(captured, CORR_DATA))
     await client.correspondents.update(1, name="ACME")
     assert "set_permissions" not in captured["body"]
 
 
-async def test_update_correspondent_set_permissions_none_sends_empty_dict(
-    client, mock_router
-):
+async def test_update_correspondent_set_permissions_none_sends_empty_dict(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/correspondents/1/").mock(
-        side_effect=_capturing_body(captured, CORR_DATA)
-    )
+    mock_router.patch("/correspondents/1/").mock(side_effect=_capturing_body(captured, CORR_DATA))
     await client.correspondents.update(1, set_permissions=SetPermissions())
     assert captured["body"]["set_permissions"] == EMPTY_PERMS_DICT
 
@@ -115,29 +105,21 @@ async def test_update_correspondent_set_permissions_none_sends_empty_dict(
 
 async def test_list_custom_fields_name_contains_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/custom_fields/").mock(
-        side_effect=_capturing_params(captured, CF_LIST)
-    )
+    mock_router.get("/custom_fields/").mock(side_effect=_capturing_params(captured, CF_LIST))
     await client.custom_fields.list(name_contains="amount")
     assert captured["params"].get("name__icontains") == "amount"
 
 
 async def test_list_custom_fields_name_exact_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/custom_fields/").mock(
-        side_effect=_capturing_params(captured, CF_LIST)
-    )
+    mock_router.get("/custom_fields/").mock(side_effect=_capturing_params(captured, CF_LIST))
     await client.custom_fields.list(name_exact="Amount")
     assert captured["params"].get("name__iexact") == "Amount"
 
 
-async def test_list_custom_fields_name_filters_omitted_when_not_provided(
-    client, mock_router
-):
+async def test_list_custom_fields_name_filters_omitted_when_not_provided(client, mock_router):
     captured: dict = {}
-    mock_router.get("/custom_fields/").mock(
-        side_effect=_capturing_params(captured, CF_LIST)
-    )
+    mock_router.get("/custom_fields/").mock(side_effect=_capturing_params(captured, CF_LIST))
     await client.custom_fields.list()
     assert "name__icontains" not in captured["params"]
     assert "name__iexact" not in captured["params"]
@@ -150,18 +132,14 @@ async def test_list_custom_fields_name_filters_omitted_when_not_provided(
 
 async def test_update_custom_field_data_type_sends_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/custom_fields/1/").mock(
-        side_effect=_capturing_body(captured, CF_DATA)
-    )
+    mock_router.patch("/custom_fields/1/").mock(side_effect=_capturing_body(captured, CF_DATA))
     await client.custom_fields.update(1, data_type="integer")
     assert captured["body"]["data_type"] == "integer"
 
 
 async def test_update_custom_field_data_type_unset_not_sent(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/custom_fields/1/").mock(
-        side_effect=_capturing_body(captured, CF_DATA)
-    )
+    mock_router.patch("/custom_fields/1/").mock(side_effect=_capturing_body(captured, CF_DATA))
     await client.custom_fields.update(1, name="Amount")
     assert "data_type" not in captured["body"]
 
@@ -171,9 +149,7 @@ async def test_update_custom_field_data_type_unset_not_sent(client, mock_router)
 # ===========================================================================
 
 
-async def test_update_document_type_set_permissions_sends_serialized_payload(
-    client, mock_router
-):
+async def test_update_document_type_set_permissions_sends_serialized_payload(client, mock_router):
     captured: dict = {}
     mock_router.patch("/document_types/1/").mock(
         side_effect=_capturing_body(captured, DOCTYPE_DATA)
@@ -191,9 +167,7 @@ async def test_update_document_type_set_permissions_unset_not_sent(client, mock_
     assert "set_permissions" not in captured["body"]
 
 
-async def test_update_document_type_set_permissions_none_sends_empty_dict(
-    client, mock_router
-):
+async def test_update_document_type_set_permissions_none_sends_empty_dict(client, mock_router):
     captured: dict = {}
     mock_router.patch("/document_types/1/").mock(
         side_effect=_capturing_body(captured, DOCTYPE_DATA)
@@ -207,24 +181,16 @@ async def test_update_document_type_set_permissions_none_sends_empty_dict(
 # ===========================================================================
 
 
-async def test_list_documents_document_type_name_contains_sends_correct_param(
-    client, mock_router
-):
+async def test_list_documents_document_type_name_contains_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/documents/").mock(
-        side_effect=_capturing_params(captured, DOC_LIST)
-    )
+    mock_router.get("/documents/").mock(side_effect=_capturing_params(captured, DOC_LIST))
     await client.documents.list(document_type_name_contains="invoice")
     assert captured["params"].get("document_type__name__icontains") == "invoice"
 
 
-async def test_list_documents_document_type_name_exact_sends_correct_param(
-    client, mock_router
-):
+async def test_list_documents_document_type_name_exact_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/documents/").mock(
-        side_effect=_capturing_params(captured, DOC_LIST)
-    )
+    mock_router.get("/documents/").mock(side_effect=_capturing_params(captured, DOC_LIST))
     await client.documents.list(document_type_name_exact="Invoice")
     assert captured["params"].get("document_type__name__iexact") == "Invoice"
 
@@ -233,9 +199,7 @@ async def test_list_documents_document_type_name_filters_omitted_when_not_provid
     client, mock_router
 ):
     captured: dict = {}
-    mock_router.get("/documents/").mock(
-        side_effect=_capturing_params(captured, DOC_LIST)
-    )
+    mock_router.get("/documents/").mock(side_effect=_capturing_params(captured, DOC_LIST))
     await client.documents.list()
     assert "document_type__name__icontains" not in captured["params"]
     assert "document_type__name__iexact" not in captured["params"]
@@ -248,27 +212,21 @@ async def test_list_documents_document_type_name_filters_omitted_when_not_provid
 
 async def test_update_document_remove_inbox_tags_true_sends_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/documents/1/").mock(
-        side_effect=_capturing_body(captured, DOC_DATA)
-    )
+    mock_router.patch("/documents/1/").mock(side_effect=_capturing_body(captured, DOC_DATA))
     await client.documents.update(1, remove_inbox_tags=True)
     assert captured["body"]["remove_inbox_tags"] is True
 
 
 async def test_update_document_remove_inbox_tags_false_sends_in_body(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/documents/1/").mock(
-        side_effect=_capturing_body(captured, DOC_DATA)
-    )
+    mock_router.patch("/documents/1/").mock(side_effect=_capturing_body(captured, DOC_DATA))
     await client.documents.update(1, remove_inbox_tags=False)
     assert captured["body"]["remove_inbox_tags"] is False
 
 
 async def test_update_document_remove_inbox_tags_unset_not_sent(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/documents/1/").mock(
-        side_effect=_capturing_body(captured, DOC_DATA)
-    )
+    mock_router.patch("/documents/1/").mock(side_effect=_capturing_body(captured, DOC_DATA))
     await client.documents.update(1, title="Updated")
     assert "remove_inbox_tags" not in captured["body"]
 
@@ -328,29 +286,21 @@ async def test_upload_custom_fields_none_not_sent(client, mock_router, tmp_path)
 
 async def test_list_storage_paths_path_contains_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/storage_paths/").mock(
-        side_effect=_capturing_params(captured, SP_LIST)
-    )
+    mock_router.get("/storage_paths/").mock(side_effect=_capturing_params(captured, SP_LIST))
     await client.storage_paths.list(path_contains="archive")
     assert captured["params"].get("path__icontains") == "archive"
 
 
 async def test_list_storage_paths_path_exact_sends_correct_param(client, mock_router):
     captured: dict = {}
-    mock_router.get("/storage_paths/").mock(
-        side_effect=_capturing_params(captured, SP_LIST)
-    )
+    mock_router.get("/storage_paths/").mock(side_effect=_capturing_params(captured, SP_LIST))
     await client.storage_paths.list(path_exact="/archive/{title}")
     assert captured["params"].get("path__iexact") == "/archive/{title}"
 
 
-async def test_list_storage_paths_path_filters_omitted_when_not_provided(
-    client, mock_router
-):
+async def test_list_storage_paths_path_filters_omitted_when_not_provided(client, mock_router):
     captured: dict = {}
-    mock_router.get("/storage_paths/").mock(
-        side_effect=_capturing_params(captured, SP_LIST)
-    )
+    mock_router.get("/storage_paths/").mock(side_effect=_capturing_params(captured, SP_LIST))
     await client.storage_paths.list()
     assert "path__icontains" not in captured["params"]
     assert "path__iexact" not in captured["params"]
@@ -361,33 +311,23 @@ async def test_list_storage_paths_path_filters_omitted_when_not_provided(
 # ===========================================================================
 
 
-async def test_update_storage_path_set_permissions_sends_serialized_payload(
-    client, mock_router
-):
+async def test_update_storage_path_set_permissions_sends_serialized_payload(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/storage_paths/1/").mock(
-        side_effect=_capturing_body(captured, SP_DATA)
-    )
+    mock_router.patch("/storage_paths/1/").mock(side_effect=_capturing_body(captured, SP_DATA))
     await client.storage_paths.update(1, set_permissions=PERMS)
     assert captured["body"]["set_permissions"] == PERMS_DICT
 
 
 async def test_update_storage_path_set_permissions_unset_not_sent(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/storage_paths/1/").mock(
-        side_effect=_capturing_body(captured, SP_DATA)
-    )
+    mock_router.patch("/storage_paths/1/").mock(side_effect=_capturing_body(captured, SP_DATA))
     await client.storage_paths.update(1, name="archive")
     assert "set_permissions" not in captured["body"]
 
 
-async def test_update_storage_path_set_permissions_none_sends_empty_dict(
-    client, mock_router
-):
+async def test_update_storage_path_set_permissions_none_sends_empty_dict(client, mock_router):
     captured: dict = {}
-    mock_router.patch("/storage_paths/1/").mock(
-        side_effect=_capturing_body(captured, SP_DATA)
-    )
+    mock_router.patch("/storage_paths/1/").mock(side_effect=_capturing_body(captured, SP_DATA))
     await client.storage_paths.update(1, set_permissions=SetPermissions())
     assert captured["body"]["set_permissions"] == EMPTY_PERMS_DICT
 
@@ -430,9 +370,7 @@ def _sync_client(router):
 def test_sync_update_correspondent_set_permissions_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.patch("/correspondents/1/").mock(
-            side_effect=_capturing_body(captured, CORR_DATA)
-        )
+        router.patch("/correspondents/1/").mock(side_effect=_capturing_body(captured, CORR_DATA))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.correspondents.update(1, set_permissions=PERMS)
     assert captured["body"]["set_permissions"] == PERMS_DICT
@@ -441,9 +379,7 @@ def test_sync_update_correspondent_set_permissions_forwarded():
 def test_sync_list_custom_fields_name_contains_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.get("/custom_fields/").mock(
-            side_effect=_capturing_params(captured, CF_LIST)
-        )
+        router.get("/custom_fields/").mock(side_effect=_capturing_params(captured, CF_LIST))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.custom_fields.list(name_contains="amount")
     assert captured["params"].get("name__icontains") == "amount"
@@ -452,9 +388,7 @@ def test_sync_list_custom_fields_name_contains_forwarded():
 def test_sync_update_custom_field_data_type_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.patch("/custom_fields/1/").mock(
-            side_effect=_capturing_body(captured, CF_DATA)
-        )
+        router.patch("/custom_fields/1/").mock(side_effect=_capturing_body(captured, CF_DATA))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.custom_fields.update(1, data_type="integer")
     assert captured["body"]["data_type"] == "integer"
@@ -463,9 +397,7 @@ def test_sync_update_custom_field_data_type_forwarded():
 def test_sync_update_document_type_set_permissions_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.patch("/document_types/1/").mock(
-            side_effect=_capturing_body(captured, DOCTYPE_DATA)
-        )
+        router.patch("/document_types/1/").mock(side_effect=_capturing_body(captured, DOCTYPE_DATA))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.document_types.update(1, set_permissions=PERMS)
     assert captured["body"]["set_permissions"] == PERMS_DICT
@@ -474,9 +406,7 @@ def test_sync_update_document_type_set_permissions_forwarded():
 def test_sync_list_documents_document_type_name_contains_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.get("/documents/").mock(
-            side_effect=_capturing_params(captured, DOC_LIST)
-        )
+        router.get("/documents/").mock(side_effect=_capturing_params(captured, DOC_LIST))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.documents.list(document_type_name_contains="invoice")
     assert captured["params"].get("document_type__name__icontains") == "invoice"
@@ -485,9 +415,7 @@ def test_sync_list_documents_document_type_name_contains_forwarded():
 def test_sync_update_document_remove_inbox_tags_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.patch("/documents/1/").mock(
-            side_effect=_capturing_body(captured, DOC_DATA)
-        )
+        router.patch("/documents/1/").mock(side_effect=_capturing_body(captured, DOC_DATA))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.documents.update(1, remove_inbox_tags=True)
     assert captured["body"]["remove_inbox_tags"] is True
@@ -513,9 +441,7 @@ def test_sync_upload_custom_fields_forwarded(tmp_path):
 def test_sync_list_storage_paths_path_contains_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.get("/storage_paths/").mock(
-            side_effect=_capturing_params(captured, SP_LIST)
-        )
+        router.get("/storage_paths/").mock(side_effect=_capturing_params(captured, SP_LIST))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.storage_paths.list(path_contains="archive")
     assert captured["params"].get("path__icontains") == "archive"
@@ -524,9 +450,7 @@ def test_sync_list_storage_paths_path_contains_forwarded():
 def test_sync_update_storage_path_set_permissions_forwarded():
     captured: dict = {}
     with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
-        router.patch("/storage_paths/1/").mock(
-            side_effect=_capturing_body(captured, SP_DATA)
-        )
+        router.patch("/storage_paths/1/").mock(side_effect=_capturing_body(captured, SP_DATA))
         with SyncPaperlessClient(url=BASE_URL, api_token=API_KEY) as client:
             client.storage_paths.update(1, set_permissions=PERMS)
     assert captured["body"]["set_permissions"] == PERMS_DICT

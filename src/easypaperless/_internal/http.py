@@ -5,18 +5,16 @@ from __future__ import annotations
 import asyncio
 import logging
 import urllib.parse
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
+from easypaperless._internal import errors
 from easypaperless.exceptions import (
-    AuthError,
-    NotFoundError,
-    PaperlessError,
     RetryExhaustedError,
     ServerError,
-    ValidationError,
 )
 
 logger = logging.getLogger(__name__)
@@ -28,6 +26,27 @@ _DEFAULT_RETRY_ON: tuple[type[Exception], ...] = (
 )
 
 
+# Request-body keys whose values are never written to the log (#0047).
+_SECRET_KEYS = frozenset({"password"})
+_MASK = "***"
+
+
+def _mask_secrets(value: Any) -> Any:
+    """Return a copy of *value* with secret fields replaced by ``"***"``.
+
+    Walks dicts and lists recursively; the original object (which is sent to
+    the server) is left untouched. Only used for DEBUG logging.
+    """
+    if isinstance(value, dict):
+        return {
+            key: _MASK if str(key).lower() in _SECRET_KEYS else _mask_secrets(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list | tuple):
+        return [_mask_secrets(item) for item in value]
+    return value
+
+
 @dataclass
 class _PagedRaw:
     """Internal container for a raw paged API response."""
@@ -37,22 +56,8 @@ class _PagedRaw:
     previous: str | None
     all_ids: list[int] | None
     items: list[dict[str, Any]]
-
-
-def _sanitise_body(body: str) -> str:
-    """Return a safe representation of a response body.
-
-    If the body looks like HTML, replaces it with a human-readable note and
-    a short excerpt to avoid flooding logs or exception messages with raw HTML.
-    """
-    stripped = body.lstrip()
-    if stripped.lower().startswith("<!") or stripped.lower().startswith("<html"):
-        excerpt = body[:200]
-        return (
-            "response body appears to be an HTML page — this may indicate a "
-            f"proxy or gateway error. Excerpt: {excerpt!r}"
-        )
-    return body
+    # ``False`` when the endpoint answered with a plain JSON array (no envelope).
+    paginated: bool = True
 
 
 class HttpSession:
@@ -66,6 +71,7 @@ class HttpSession:
         retry_backoff: float = 1.0,
         retry_on: tuple[type[Exception], ...] | None = None,
         tenacity_retrying: Any = None,
+        transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         # Normalize: strip trailing slash, then append /api
         self._base_url = base_url.rstrip("/") + "/api"
@@ -78,14 +84,27 @@ class HttpSession:
             retry_on if retry_on is not None else _DEFAULT_RETRY_ON
         )
         self._tenacity_retrying = tenacity_retrying
+        self._transport = transport
+
+    def __repr__(self) -> str:
+        # Never include the API token (#0047).
+        return f"{type(self).__name__}(base_url={self._base_url!r})"
+
+    @property
+    def base_url(self) -> str:
+        """The API root URL, e.g. ``"http://localhost:8000/api"``."""
+        return self._base_url
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None:
             self._client = httpx.AsyncClient(
                 base_url=self._base_url,
+                # No default "Accept: application/json": server_version() relies
+                # on GET /api/ -> HTML schema view, which would then answer 406.
                 headers={"Authorization": f"Token {self._api_token}"},
                 timeout=self._timeout,
                 follow_redirects=True,
+                transport=self._transport,
             )
         return self._client
 
@@ -94,26 +113,17 @@ class HttpSession:
             await self._client.aclose()
             self._client = None
 
-    def _raise_for_status(self, response: httpx.Response, method: str, path: str) -> None:
-        if response.is_success:
-            return
-        try:
-            detail = response.json().get("detail", response.text)
-        except Exception:
-            detail = _sanitise_body(response.text)
+    async def _send(self, method: str, url: str, **kwargs: Any) -> httpx.Response:
+        """Send one request; the only place that calls the httpx client.
 
-        status = response.status_code
-        logger.warning("HTTP %s on %s %s — %s", status, method.upper(), path, detail)
-        if status in (401, 403):
-            raise AuthError(detail, status_code=status)
-        elif status == 404:
-            raise NotFoundError(detail, status_code=status)
-        elif status == 422:
-            raise ValidationError(detail, status_code=status)
-        elif status >= 500:
-            raise ServerError(detail, status_code=status)
-        else:
-            raise PaperlessError(detail, status_code=status)
+        Every ``httpx.HTTPError`` is translated by
+        :func:`~easypaperless._internal.errors.map_transport_error`, so all
+        request paths raise the same ``TransportError`` subclasses.
+        """
+        try:
+            return await self._get_client().request(method, url, **kwargs)
+        except httpx.HTTPError as exc:
+            raise errors.map_transport_error(exc, method, url) from exc
 
     async def _do_request(
         self,
@@ -127,31 +137,22 @@ class HttpSession:
         timeout: float | None = None,
     ) -> httpx.Response:
         """Execute a single HTTP request attempt (no retry logic)."""
-        client = self._get_client()
-        try:
-            response = await client.request(
-                method,
-                path,
-                params=params,
-                json=json,
-                data=data,
-                files=files,
-                timeout=timeout,
-            )
-        except httpx.TimeoutException as exc:
-            raise ServerError(
-                f"Request timed out ({method.upper()} {path}). "
-                "The operation may have completed on the server despite this error."
-            ) from exc
-        except httpx.HTTPError as exc:
-            msg = str(exc) or f"HTTP error on {method.upper()} {path}"
-            raise ServerError(msg) from exc
+        response = await self._send(
+            method,
+            path,
+            params=params,
+            json=json,
+            data=data,
+            files=files,
+            # ``None`` means "no timeout" to httpx; fall back to the client default.
+            timeout=timeout if timeout is not None else httpx.USE_CLIENT_DEFAULT,
+        )
         if logger.isEnabledFor(logging.DEBUG):
             body = response.text
             if len(body) > 1000:
                 body = body[:1000] + "...<truncated>"
             logger.debug("%s %s %s response=%s", response.status_code, method.upper(), path, body)
-        self._raise_for_status(response, method, path)
+        errors.raise_for_status(response, method, path)
         return response
 
     async def request(
@@ -164,26 +165,56 @@ class HttpSession:
         data: dict[str, Any] | None = None,
         files: Any = None,
         timeout: float | None = None,
+        retry: bool = True,
     ) -> httpx.Response:
+        """Send a request under the retry policy.
+
+        ``retry=False`` sends exactly one attempt regardless of the client's
+        retry configuration (built-in loop and ``tenacity_retrying``).  Used for
+        requests that create something, where a retry after a lost response
+        could create a duplicate (#0044).
+        """
         if logger.isEnabledFor(logging.DEBUG):
             if json is not None:
-                logger.debug("%s %s body=%s", method.upper(), path, json)
+                logger.debug("%s %s body=%s", method.upper(), path, _mask_secrets(json))
             elif data is not None:
-                logger.debug("%s %s data=%s", method.upper(), path, data)
+                logger.debug("%s %s data=%s", method.upper(), path, _mask_secrets(data))
             elif files is not None:
                 logger.debug("%s %s <multipart/form-data>", method.upper(), path)
             else:
                 logger.debug("%s %s", method.upper(), path)
 
+        return await self._retrying(
+            method,
+            path,
+            lambda: self._do_request(
+                method, path, params=params, json=json, data=data, files=files, timeout=timeout
+            ),
+            retry=retry,
+        )
+
+    async def _retrying(
+        self,
+        method: str,
+        path: str,
+        attempt_fn: Callable[[], Awaitable[httpx.Response]],
+        *,
+        retry: bool = True,
+    ) -> httpx.Response:
+        """Run *attempt_fn* under the configured retry policy.
+
+        Shared by every request path (single requests, downloads and follow-up
+        pages) so they all retry the same way.  With ``retry=False`` the
+        attempt runs exactly once and any error propagates unchanged.
+        """
+        if not retry:
+            return await attempt_fn()
+
         # tenacity-based retry path
         if self._tenacity_retrying is not None:
             async for attempt in self._tenacity_retrying:
                 with attempt:
-                    result = await self._do_request(
-                        method, path,
-                        params=params, json=json, data=data,
-                        files=files, timeout=timeout,
-                    )
+                    result = await attempt_fn()
             return result  # noqa: F821
 
         # built-in retry path
@@ -191,9 +222,7 @@ class HttpSession:
         total_attempts = self._retry_attempts + 1
         for attempt in range(1, total_attempts + 1):
             try:
-                return await self._do_request(
-                    method, path, params=params, json=json, data=data, files=files, timeout=timeout
-                )
+                return await attempt_fn()
             except Exception as exc:
                 if not isinstance(exc, self._retry_on):
                     raise
@@ -231,30 +260,24 @@ class HttpSession:
         redirect to a media URL served by nginx, which still needs the token.
         This method follows each redirect hop as a *fresh* request so the
         client's default Authorization header is always re-attached.
-        """
-        client = self._get_client()
-        logger.debug("GET (download) %s", path)
-        try:
-            resp = await client.request("GET", path, follow_redirects=False)
-        except httpx.TimeoutException as exc:
-            raise ServerError(f"Request timed out (GET {path})") from exc
-        except httpx.HTTPError as exc:
-            raise ServerError(str(exc) or f"HTTP error on GET {path}") from exc
 
+        The whole redirect chain counts as one attempt of the retry policy.
+        """
+        logger.debug("GET (download) %s", path)
+        return await self._retrying("GET", path, lambda: self._download_once(path))
+
+    async def _download_once(self, path: str) -> httpx.Response:
+        """One download attempt: initial GET plus up to five redirect hops."""
+        resp = await self._send("GET", path, follow_redirects=False)
         hops = 0
         while resp.is_redirect and hops < 5:
             location = resp.headers["location"]
             logger.debug("Redirect %d -> %s", resp.status_code, location)
-            try:
-                resp = await client.request("GET", location, follow_redirects=False)
-            except httpx.TimeoutException as exc:
-                raise ServerError(f"Request timed out (GET {location})") from exc
-            except httpx.HTTPError as exc:
-                raise ServerError(str(exc) or f"HTTP error on GET {location}") from exc
+            resp = await self._send("GET", location, follow_redirects=False)
             hops += 1
 
         logger.debug("%d GET %s", resp.status_code, path)
-        self._raise_for_status(resp, "GET", path)
+        errors.raise_for_status(resp, "GET", path)
         return resp
 
     async def post(
@@ -265,8 +288,11 @@ class HttpSession:
         data: dict[str, Any] | None = None,
         files: Any = None,
         timeout: float | None = None,
+        retry: bool = True,
     ) -> httpx.Response:
-        return await self.request("POST", path, json=json, data=data, files=files, timeout=timeout)
+        return await self.request(
+            "POST", path, json=json, data=data, files=files, timeout=timeout, retry=retry
+        )
 
     async def patch(self, path: str, *, json: Any = None) -> httpx.Response:
         return await self.request("PATCH", path, json=json)
@@ -320,15 +346,8 @@ class HttpSession:
         while next_url:
             next_url = self._normalise_next_url(next_url)
             logger.debug("Fetching next page: %s", next_url)
-            # next is absolute; pass it directly to the client
-            client = self._get_client()
-            try:
-                response = await client.get(next_url)
-            except httpx.TimeoutException as exc:
-                raise ServerError(f"Request timed out (GET {next_url})") from exc
-            except httpx.HTTPError as exc:
-                raise ServerError(str(exc) or f"HTTP error on GET {next_url}") from exc
-            self._raise_for_status(response, "GET", next_url)
+            # next is absolute; httpx uses it as-is instead of joining base_url
+            response = await self.get(next_url)
             page = response.json()
             results.extend(page.get("results", []))
             if on_page is not None:
@@ -397,13 +416,69 @@ class HttpSession:
             A :class:`_PagedRaw` with all collected items and first-page
             metadata.
         """
-        results: list[dict[str, Any]] = []
         if params:
             logger.debug("Fetching %s (params=%s)", path, params)
         else:
             logger.debug("Fetching %s", path)
         response = await self.get(path, params=params)
-        page = response.json()
+        return await self._collect_pages(
+            path, response.json(), max_results=max_results, on_page=on_page
+        )
+
+    async def get_list(
+        self,
+        path: str,
+        params: dict[str, Any] | None = None,
+        *,
+        all_pages: bool = True,
+    ) -> _PagedRaw:
+        """Fetch a list endpoint that returns a plain JSON array *or* a paginated envelope.
+
+        Some paperless-ngx endpoints (notes, tasks) answer with a plain JSON
+        array; a paginated dict is accepted as well.  A plain array is
+        returned as one page with ``paginated=False``, ``count`` set to its
+        length and no ``next`` / ``previous`` / ``all_ids``.  A paginated dict
+        is handled like :meth:`get_all_pages_paged` when *all_pages* is
+        ``True``, or like :meth:`get_page` otherwise.
+
+        Args:
+            path: API path relative to the base URL.
+            params: Optional query parameters.
+            all_pages: Follow the ``next`` links of a paginated response.
+
+        Returns:
+            A :class:`_PagedRaw` with the collected items.
+        """
+        logger.debug("Fetching %s (params=%s)", path, params)
+        data = (await self.get(path, params=params)).json()
+        if isinstance(data, list):
+            return _PagedRaw(len(data), None, None, None, data, paginated=False)
+        if not isinstance(data, dict):
+            return _PagedRaw(0, None, None, None, [], paginated=False)
+        if not all_pages:
+            return _PagedRaw(
+                count=data.get("count", 0),
+                next=data.get("next"),
+                previous=data.get("previous"),
+                all_ids=data.get("all"),
+                items=data.get("results", []),
+            )
+        return await self._collect_pages(path, data)
+
+    async def _collect_pages(
+        self,
+        path: str,
+        page: dict[str, Any],
+        *,
+        max_results: int | None = None,
+        on_page: Callable[[int, int | None], None] | None = None,
+    ) -> _PagedRaw:
+        """Collect the items of *page* and of every page linked via ``next``.
+
+        ``next`` / ``previous`` of the result are ``None``; ``count`` and
+        ``all_ids`` come from *page*.
+        """
+        results: list[dict[str, Any]] = []
         total_count: int = page.get("count", 0)
         all_ids: list[int] | None = page.get("all")
         results.extend(page.get("results", []))
@@ -418,14 +493,8 @@ class HttpSession:
         while next_url:
             next_url = self._normalise_next_url(next_url)
             logger.debug("Fetching next page: %s", next_url)
-            client = self._get_client()
-            try:
-                response = await client.get(next_url)
-            except httpx.TimeoutException as exc:
-                raise ServerError(f"Request timed out (GET {next_url})") from exc
-            except httpx.HTTPError as exc:
-                raise ServerError(str(exc) or f"HTTP error on GET {next_url}") from exc
-            self._raise_for_status(response, "GET", next_url)
+            # next is absolute; httpx uses it as-is instead of joining base_url
+            response = await self.get(next_url)
             page = response.json()
             results.extend(page.get("results", []))
             if on_page is not None:

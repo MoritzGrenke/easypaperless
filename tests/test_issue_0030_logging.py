@@ -53,7 +53,7 @@ async def test_debug_log_emitted_for_response(session, caplog):
 
 
 async def test_warning_logged_on_http_error_response(session, caplog):
-    """WARNING is logged when _raise_for_status fires before raising the exception."""
+    """WARNING is logged when raise_for_status fires before raising the exception."""
     with caplog.at_level(logging.WARNING, logger="easypaperless._internal.http"):
         with respx.mock(base_url=API_BASE, assert_all_called=False) as router:
             router.get("/tags/").mock(return_value=Response(404, json={"detail": "Not found"}))
@@ -78,9 +78,7 @@ async def test_auth_token_not_in_debug_logs(session, caplog):
             await session.post("/tags/", json={"name": "test"})
 
     for record in caplog.records:
-        assert API_KEY not in record.message, (
-            f"API key leaked in log message: {record.message!r}"
-        )
+        assert API_KEY not in record.message, f"API key leaked in log message: {record.message!r}"
 
 
 # ---------------------------------------------------------------------------

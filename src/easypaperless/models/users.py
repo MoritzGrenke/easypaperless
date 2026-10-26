@@ -185,19 +185,26 @@ PaperlessPermission = Literal[
     "socialaccount.view_socialapp",
     "socialaccount.view_socialtoken",
 ]
-"""All known paperless-ngx permission strings.
+"""All known paperless-ngx permission strings, in the app-labelled form ``"<app>.<codename>"``.
 
-Use with standard ``in`` checks against
-:attr:`User.user_permissions` or :attr:`User.inherited_permissions`
-for type-safe, IDE-discoverable permission checks.
+paperless-ngx uses this form only in :attr:`User.inherited_permissions`
+(permissions a user gets from its groups).  :attr:`User.user_permissions` and
+:attr:`~easypaperless.models.groups.Group.permissions` hold *bare* codenames
+(``"view_document"``), both when paperless-ngx returns them and when you send
+them; the app-labelled form is rejected there with a
+:exc:`~easypaperless.exceptions.BadRequestError` (verified against
+paperless-ngx 2.18.2).  Strip the app label with ``perm.split(".", 1)[1]``.
 
 Example::
 
     from easypaperless import PaperlessPermission
 
     user = await client.users.get(1)
-    all_perms = set(user.user_permissions) | set(user.inherited_permissions)
-    can_view_docs = "documents.view_document" in all_perms
+    perm: PaperlessPermission = "documents.view_document"
+    codename = perm.split(".", 1)[1]                 # "view_document"
+    can_view_docs = perm in (user.inherited_permissions or []) or codename in (
+        user.user_permissions or []
+    )
 """
 
 
@@ -216,9 +223,11 @@ class User(BaseModel):
         is_active: Whether the account is active.
         is_superuser: Whether the user has unrestricted superuser access.
         groups: IDs of groups the user belongs to.
-        user_permissions: Directly assigned permission strings.
-        inherited_permissions: Effective permissions inherited from groups
-            (read-only, not sent on create/update).
+        user_permissions: Directly assigned permission codenames, without the
+            app label (e.g. ``"view_document"``).
+        inherited_permissions: Permissions inherited from the user's groups,
+            in the app-labelled form (e.g. ``"documents.view_document"``, see
+            :data:`PaperlessPermission`). Read-only, not sent on create/update.
         is_mfa_enabled: Whether multi-factor authentication is enabled
             (read-only, not sent on create/update).
     """

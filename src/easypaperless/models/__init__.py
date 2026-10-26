@@ -16,9 +16,17 @@ from easypaperless.models.documents import (
     Task,
     TaskStatus,
 )
+from easypaperless.models.groups import Group
 from easypaperless.models.paged_result import PagedResult
 from easypaperless.models.permissions import PermissionSet, SetPermissions
 from easypaperless.models.storage_paths import StoragePath
+from easypaperless.models.system_status import (
+    SystemStatus,
+    SystemStatusDatabase,
+    SystemStatusMigrations,
+    SystemStatusStorage,
+    SystemStatusTasks,
+)
 from easypaperless.models.tags import Tag
 from easypaperless.models.users import PaperlessPermission, User
 
@@ -36,10 +44,16 @@ __all__ = [
     "DocumentType",
     "FieldDataType",
     "FileMetadataEntry",
+    "Group",
     "PermissionSet",
     "SearchHit",
     "SetPermissions",
     "StoragePath",
+    "SystemStatus",
+    "SystemStatusDatabase",
+    "SystemStatusMigrations",
+    "SystemStatusStorage",
+    "SystemStatusTasks",
     "Tag",
     "Task",
     "TaskStatus",

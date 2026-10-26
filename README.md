@@ -138,6 +138,107 @@ with SyncPaperlessClient(url=url, api_token=api_token) as client:
 
 ```
 
+`SyncPaperlessClient` runs its own private event loop thread, so it can be used from a worker thread while another event loop (e.g. FastAPI/uvicorn) runs in the main thread. `close()` (or leaving the `with` block) stops and joins that thread and is safe to call twice. Do not call it directly from inside a running event loop (e.g. Jupyter) — use `PaperlessClient` there.
+
+### Testing with an injected transport
+
+Both clients accept a `transport` keyword (`httpx.AsyncBaseTransport`). It is handed to the internal `httpx.AsyncClient`, while easypaperless still controls the auth header, base URL, timeout and retries. This lets you test code that uses easypaperless with an `httpx.MockTransport`, without global patching:
+
+``` Python
+import httpx
+from easypaperless import SyncPaperlessClient
+
+def handler(request: httpx.Request) -> httpx.Response:
+    assert request.url.path == "/api/tags/"
+    return httpx.Response(200, json={"count": 0, "next": None, "previous": None, "results": []})
+
+with SyncPaperlessClient(url="http://paperless.test", api_token="t",
+                         transport=httpx.MockTransport(handler)) as client:
+    assert client.tags.list().count == 0
+```
+
+With `SyncPaperlessClient` the handler runs on the client's internal loop thread. A custom `httpx.AsyncHTTPTransport(proxy=..., local_address=..., verify=...)` works the same way.
+
+## ⚠️ Error Handling
+
+Every exception raised by easypaperless derives from `PaperlessError` and is importable from `easypaperless`. Each one has a non-empty message and a `status_code` attribute (the HTTP status, or `None` when no response was received).
+
+```
+PaperlessError
+├── AuthError
+│   ├── AuthenticationError     401 – token missing or invalid
+│   └── PermissionDeniedError   403 – token valid, permission missing
+├── BadRequestError             400 – .field_errors, .non_field_errors
+├── NotFoundError               404, or a name that could not be resolved
+├── ValidationError             422
+├── NotPaperlessError           server_version(): URL is not a paperless-ngx instance
+├── ServerError
+│   ├── ServerResponseError     5xx response (status_code set)
+│   └── TransportError          no response: connection refused, DNS, TLS, protocol error
+│       └── TransportTimeoutError   connect/read/write/pool timeout
+├── UploadError                 document processing task failed (.task)
+├── TaskTimeoutError            task polling exceeded poll_timeout (.task_id, .timeout)
+└── RetryExhaustedError         all retry attempts failed (last error chained as __cause__)
+```
+
+| Exception | Raised when | `status_code` |
+|-----------|-------------|---------------|
+| `AuthenticationError` | HTTP 401: the API token is missing or invalid | `401` |
+| `PermissionDeniedError` | HTTP 403: the token is valid but lacks a permission; the message is paperless's `detail` text verbatim | `403` |
+| `BadRequestError` | HTTP 400: paperless rejected the request data. `field_errors` maps field name → list of messages, `non_field_errors` holds the rest | `400` |
+| `NotFoundError` | HTTP 404, or a tag/correspondent/... name could not be resolved | `404` / `None` |
+| `ValidationError` | HTTP 422 | `422` |
+| `NotPaperlessError` | `server_version()`: the API root answered with 404, or with a response (e.g. an HTML page) without the `X-Version` header | the HTTP status |
+| `ServerResponseError` | HTTP 5xx, or a download returned an HTML page instead of the file | the HTTP status |
+| `TransportError` | paperless could not be reached: connection refused, DNS or TLS failure, broken connection. The original `httpx` exception is chained as `__cause__` | `None` |
+| `TransportTimeoutError` | the request timed out (the operation may still have completed on the server) | `None` |
+| `UploadError` | the processing task of an upload reports `FAILURE`/`REVOKED`, or succeeds without a document ID. `.task` holds the `Task` with paperless's `status` and `result` unaltered | `None` |
+| `TaskTimeoutError` | `tasks.wait()` / `upload(wait=True)` did not finish within `poll_timeout`. `.task_id` and `.timeout` are set so you can call `tasks.wait()` again | `None` |
+| `RetryExhaustedError` | all `retry_attempts` failed; `.attempts`, `.url`, last error as `__cause__` | `None` |
+| `PaperlessError` | any other HTTP error status (e.g. 409, 429) | the HTTP status |
+
+The classes are subclasses of the earlier ones, so existing `except AuthError` / `except ServerError` clauses keep working. Catching a more specific class lets you react differently:
+
+```python
+from easypaperless import (
+    BadRequestError, PermissionDeniedError, AuthenticationError,
+    ServerResponseError, TransportError,
+)
+
+try:
+    await client.tags.create(name="")
+except BadRequestError as err:
+    print(err.field_errors)          # {"name": ["This field may not be blank."]}
+except PermissionDeniedError as err:
+    print(f"grant permission: {err}")
+except AuthenticationError:
+    print("check your API token")
+except TransportError:
+    print("paperless unreachable — retry later")
+except ServerResponseError as err:
+    print(f"paperless returned {err.status_code}")
+```
+
+### Retries
+
+The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
+
+When all retries are exhausted you get a `RetryExhaustedError`; the original classifiable error of the last attempt (e.g. `TransportError` or `ServerResponseError`) is available as its `__cause__`, so `isinstance(err.__cause__, TransportError)` tells you what went wrong.
+
+Requests that create something are **never retried**, whatever `retry_attempts` or `tenacity_retrying` say: `documents.upload()`, every resource's `create()` and `documents.notes.create()`. If the response is lost after paperless has already accepted the request (e.g. a timeout), a retry would create a duplicate. These calls send exactly one request and raise the error (e.g. `TransportTimeoutError`), so you can decide yourself whether to check and try again. All other requests (GET, PATCH, DELETE and the bulk/trash/task-acknowledge POSTs) keep retrying.
+
+## 🔒 Security: Secrets in Logs and Errors
+
+easypaperless never puts your API token into exception messages, `repr()` of clients/resources, or its own log records (at any level, including `DEBUG`). The `Authorization` header is never logged, and when request bodies are logged at `DEBUG`, `password` values (e.g. from `users.create()` / `users.update()`) are replaced by `"***"`.
+
+Not covered: secrets you put into URLs, query parameters or free-text fields (e.g. note text) yourself, and logging done by `httpx`/`httpcore`. Those libraries log at `DEBUG` under the `httpx` and `httpcore` loggers; keep them at `WARNING` or above in production:
+
+```python
+import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+```
+
 ## 📖 Functional Overview
 
 All functionality is accessed through resource attributes on the client (e.g. `client.documents`, `client.tags`). Both `PaperlessClient` (async) and `SyncPaperlessClient` (sync) expose the same resources and methods.
@@ -148,18 +249,39 @@ The `UNSET` sentinel (importable from `easypaperless`) allows you to distinguish
 
 ### Client
 
-* **PaperlessClient / SyncPaperlessClient** Token-based authentication. Configurable timeout, poll interval, and poll timeout for slow instances. Optional built-in retry-with-exponential-backoff for transient errors (`retry_attempts`, `retry_backoff`, `retry_on`); also accepts a pre-configured `tenacity.AsyncRetrying` instance for advanced retry strategies.
+* **PaperlessClient / SyncPaperlessClient** Token-based authentication. Configurable timeout, poll interval, and poll timeout for slow instances. Optional built-in retry-with-exponential-backoff for transient errors (`retry_attempts`, `retry_backoff`, `retry_on`); also accepts a pre-configured `tenacity.AsyncRetrying` instance for advanced retry strategies. Optional injectable `httpx` transport (`transport=`) for mock-based testing or custom proxy/TLS settings.
+* **server_version()** One cheap authenticated request (`GET /api/`) that returns the paperless-ngx version from the `X-Version` header, e.g. `"2.18.4"`. Use it as a "test connection" check: a refused token raises `AuthenticationError`, an unreachable server raises `TransportError`, and a URL that is not a paperless-ngx instance (404, or an HTML page without `X-Version`) raises `NotPaperlessError`.
+* **system_status()** Returns a `SystemStatus` model from `GET /api/status/`: version, install type, server OS, storage, database and migrations, plus the health of Redis, Celery, the search index and the classifier. All fields are optional. Requires an admin token (otherwise `PermissionDeniedError`).
+
+```python
+from easypaperless import NotPaperlessError
+
+try:
+    print(await client.server_version())     # "2.18.4"
+except NotPaperlessError:
+    print("this URL is not a paperless-ngx instance")
+
+status = await client.system_status()
+print(status.database.status, status.tasks.celery_status)
+```
 
 ### `client.documents` — Documents
 
 * **list()** Search and filter documents by title, content, tags, dates, correspondent, and more. The workhorse of the wrapper.
+  `list(checksum="<md5>")` finds a document by the MD5 of its original file (case-insensitive exact match). Documents in the trash are **not** found, but paperless still rejects a re-upload of the same file as a duplicate: the upload's `UploadError` then has `err.task.result` ending in `"Note: existing document is in the trash."` and `err.task.related_document` set to `None`. Use `client.trash.list()` / `client.trash.restore()` to find or recover it.
 * **get()** Fetch a single document's data; optionally includes extended file metadata.
 * **get_metadata()** Retrieve file-level technical metadata (checksums, sizes, MIME types) for a specific document.
 * **update()** Partially update document fields like title, tags, or dates using PATCH semantics. Supports `UNSET` to distinguish "not provided" from explicit `None`.
 * **delete()** Permanently remove a document from your Paperless-ngx instance.
 * **download()** Download the binary content of a document — either the archived PDF or the original file.
 * **thumbnail()** Download the thumbnail image of a document as raw bytes.
-* **upload()** Upload a new file to Paperless-ngx and optionally wait for the processing task to complete.
+* **upload()** Upload a new file to Paperless-ngx and optionally wait for the processing task to complete. Accepts a path or in-memory `bytes` (then `filename` is required; no temporary file is written), plus optional `filename`, `content_type` and a per-call `request_timeout` for the upload request. The upload request is never retried automatically (see [Retries](#retries)).
+
+```python
+task_id = await client.documents.upload(
+    pdf_bytes, filename="capture.pdf", content_type="application/pdf", request_timeout=120
+)
+```
 * **history()** Retrieve the full audit log for a document as a `PagedResult[AuditLogEntry]`, showing who changed what and when.
 
 #### Document Bulk Operations
@@ -212,13 +334,37 @@ The `UNSET` sentinel (importable from `easypaperless`) allows you to distinguish
 ### `client.users` — Users
 
 * **list() / get() / create() / update() / delete()** Full CRUD for Paperless-ngx user accounts. Supports filtering by username and paginated results.
-* Use `PaperlessPermission` (a typed `Literal` alias) for type-safe permission checks against `user.user_permissions` or `user.inherited_permissions`.
+* Use `PaperlessPermission` (a typed `Literal` alias of the app-labelled strings, e.g. `"documents.view_document"`) for type-safe checks against `user.inherited_permissions`. `user.user_permissions` and `group.permissions` use bare codenames (`"view_document"`), both on read and on write; paperless-ngx rejects the app-labelled form there.
+
+### `client.groups` — Groups
+
+* **list() / get() / create() / update() / delete()** Full CRUD for Paperless-ngx user groups. Supports filtering by name and paginated results. Use group IDs in `set_permissions` to grant object permissions to a whole group.
 
 ### `client.trash` — Trash
 
 * **list()** List all documents currently in the Paperless-ngx trash bin. Returns `PagedResult[Document]`.
 * **restore()** Recover one or more trashed documents back to active status.
 * **empty()** Permanently and irreversibly delete trashed documents. **This operation cannot be undone.**
+
+### `client.tasks` — Background Tasks
+
+* **list()** List paperless-ngx background tasks, filtered by `task_id`, `status`, `task_name`, `type` or `acknowledged`. Returns `PagedResult[Task]`.
+* **get()** Fetch one task by its UUID (e.g. the ID returned by `upload(wait=False)`); raises `NotFoundError` for an unknown ID.
+* **wait()** Poll a task until it finishes and return the final `Task`. Accepts `poll_interval` / `poll_timeout` (falling back to the client defaults). `upload(wait=True)` uses it internally.
+* **acknowledge()** Mark tasks as acknowledged (by numeric `Task.id`), like "Dismiss" in the paperless UI. Returns the number of acknowledged tasks.
+
+```python
+task_id = await client.documents.upload("scan.pdf")      # returns at once; persist task_id
+try:
+    task = await client.tasks.wait(task_id, poll_timeout=120)
+    doc = await client.documents.get(int(task.related_document))
+except UploadError as err:
+    if err.task and ": It is a duplicate of " in (err.task.result or ""):
+        # "scan.pdf: Not consuming scan.pdf: It is a duplicate of Invoice (#12)."
+        existing_id = err.task.related_document          # "12", or None if #12 is in the trash
+except TaskTimeoutError as err:
+    ...                                                   # still running: wait again later with err.task_id
+```
 
 
 ## 📚 Documentation
