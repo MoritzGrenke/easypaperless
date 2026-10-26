@@ -92,11 +92,13 @@ class GroupsResource:
 
         Args:
             name: Group name. Must be unique.
-            permissions: Permission codename strings to grant the group
-                (e.g. ``["documents.view_document"]``). See
-                :data:`~easypaperless.PaperlessPermission`. Omitted from the
-                request when not provided, so the group starts without
-                permissions.
+            permissions: Permission codenames to grant the group, without
+                the app label (e.g. ``["view_document", "add_note"]``).
+                paperless-ngx rejects the app-labelled form
+                ``"documents.view_document"`` with a
+                :exc:`~easypaperless.exceptions.BadRequestError`.  When
+                omitted, ``[]`` is sent (paperless-ngx requires the field),
+                so the group starts without permissions.
 
         Returns:
             The newly created :class:`~easypaperless.models.groups.Group`.
@@ -108,7 +110,8 @@ class GroupsResource:
                 "groups",
                 Group,
                 name=name,
-                permissions=permissions,
+                # paperless-ngx answers 400 "This field is required." without it.
+                permissions=[] if isinstance(permissions, Unset) else permissions,
             ),
         )
 
@@ -128,8 +131,9 @@ class GroupsResource:
         Args:
             id: Numeric ID of the group to update.
             name: New group name.
-            permissions: Replacement list of permission codename strings.
-                Pass ``[]`` to remove all permissions.
+            permissions: Replacement list of permission codenames, without
+                the app label (e.g. ``["view_document"]``).  Pass ``[]`` to
+                remove all permissions.
 
         Returns:
             The updated :class:`~easypaperless.models.groups.Group`.

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from easypaperless import PaperlessClient
+from tests.integration._cleanup import purge_document
 
 
 def _make_unique_pdf() -> bytes:
@@ -55,4 +56,4 @@ async def test_upload_and_cleanup(client: PaperlessClient, uid: str) -> None:
     finally:
         tmp_path.unlink(missing_ok=True)
         if doc is not None:
-            await client.documents.delete(doc.id)
+            await purge_document(client, doc.id)

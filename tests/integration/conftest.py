@@ -15,6 +15,7 @@ import pytest_asyncio
 from dotenv import load_dotenv
 
 from easypaperless import PaperlessClient, SyncPaperlessClient
+from tests.integration._cleanup import purge_document
 
 load_dotenv(dotenv_path=Path(__file__).parent / ".env")
 
@@ -83,37 +84,41 @@ async def client() -> object:
         yield c
 
 
-@pytest_asyncio.fixture(scope="module")
-async def module_client() -> object:
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def temp_documents():
+    """Two uploaded PDFs shared by a test module; purged (incl. trash) afterwards.
+
+    The fixture runs in the module's event loop and keeps its own client to
+    itself.  Tests must use the function-scoped ``client`` fixture: an
+    ``httpx.AsyncClient`` created in one event loop cannot be used from
+    another (its pooled connections fail with "Event loop is closed").
+    """
     url, key = _require_env()
-    async with PaperlessClient(url=url, api_token=key) as c:
-        yield c
-
-
-@pytest_asyncio.fixture(scope="module")
-async def temp_documents(module_client):
     created_docs = []
     tmp_files = []
-    for i in range(2):
-        pdf_bytes = _make_pdf(_random_text()).getvalue()
-        tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
-        tmp.write(pdf_bytes)
-        tmp.close()
-        tmp_files.append(tmp.name)
+    async with PaperlessClient(url=url, api_token=key) as setup_client:
+        try:
+            for i in range(2):
+                pdf_bytes = _make_pdf(_random_text()).getvalue()
+                tmp = tempfile.NamedTemporaryFile(suffix=".pdf", delete=False)
+                tmp.write(pdf_bytes)
+                tmp.close()
+                tmp_files.append(tmp.name)
 
-        doc = await module_client.documents.upload(
-            file=Path(tmp.name),
-            title=f"__integration_test_{i}__",
-            wait=True,
-        )
-        created_docs.append(doc)
+                doc = await setup_client.documents.upload(
+                    file=Path(tmp.name),
+                    title=f"__integration_test_{i}__",
+                    wait=True,
+                    poll_timeout=120.0,
+                )
+                created_docs.append(doc)
 
-    yield created_docs
-
-    for doc in created_docs:
-        await module_client.documents.delete(doc.id)
-    for path in tmp_files:
-        Path(path).unlink(missing_ok=True)
+            yield created_docs
+        finally:
+            for doc in created_docs:
+                await purge_document(setup_client, doc.id)
+            for path in tmp_files:
+                Path(path).unlink(missing_ok=True)
 
 
 @pytest.fixture

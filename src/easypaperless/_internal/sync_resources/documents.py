@@ -216,7 +216,19 @@ class SyncDocumentsResource:
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
             modified_until: Only documents modified on or before this date/time.
                 String input must be ISO-8601: ``"YYYY-MM-DD"`` or ``"YYYY-MM-DDTHH:MM:SS"``.
-            checksum: MD5 checksum of the original file (exact match).
+            checksum: MD5 checksum (hex) of the original uploaded file, matched
+                exactly but case-insensitively (sent as ``checksum__iexact``).
+                Documents in the trash are **not** found, yet paperless-ngx
+                still rejects a re-upload of the same file as a duplicate.  To
+                detect that case, catch the
+                :exc:`~easypaperless.exceptions.UploadError` of
+                ``upload(wait=True)`` (or of ``tasks.wait()``): ``err.task.result``
+                contains ``": It is a duplicate of "`` and ends in
+                ``"Note: existing document is in the trash."``, and
+                ``err.task.related_document`` is ``None`` (for a live duplicate
+                it is the existing document's ID).  ``client.trash.list()``
+                shows the trashed document; ``client.trash.restore()`` brings
+                it back.
             page_size: Number of results per API page.  Default: ``25``.
             page: Return only this specific page (1-based).
             ordering: Field name to sort by.
@@ -319,6 +331,9 @@ class SyncDocumentsResource:
             set_permissions: Explicit view/change permission sets.
                 Pass ``None`` to clear all permissions (overwrite with empty).
                 Omit (or pass :data:`~easypaperless.UNSET`) to leave unchanged.
+                The given sets replace the document's current view and change
+                users and groups.  Together with ``owner`` everything goes out
+                in one PATCH, which paperless-ngx applies as a whole.
             remove_inbox_tags: When ``True``, removes all inbox tags from the document.
 
         Returns:
@@ -427,7 +442,8 @@ class SyncDocumentsResource:
                 request).  For a path, overrides the name taken from the path.
             content_type: MIME type of the file part, sent as given (e.g.
                 ``"application/pdf"``).  When omitted, it is guessed from the
-                file name as before.
+                file name as before.  paperless-ngx detects the file type from
+                the bytes and does not rely on this value to accept the file.
             request_timeout: HTTP timeout in seconds for the upload request
                 only, overriding the client's ``timeout`` for this call.  Does
                 not affect task polling (see ``poll_timeout``).  When omitted,
@@ -461,9 +477,15 @@ class SyncDocumentsResource:
         Raises:
             ~easypaperless.exceptions.ValidationError: If *file* is ``bytes``
                 and no *filename* is given.
+            ~easypaperless.exceptions.BadRequestError: If paperless-ngx rejects
+                the file before processing starts, e.g. an unsupported file
+                type or an empty file (``err.field_errors["document"]``).
             ~easypaperless.exceptions.UploadError: If processing fails;
                 ``err.task`` holds the task with paperless-ngx's ``result``
-                unaltered (e.g. to recognise a duplicate).
+                unaltered.  For a duplicate, ``err.task.result`` contains
+                ``": It is a duplicate of "`` and ``err.task.related_document``
+                is the existing document's ID (``None`` if that document is
+                in the trash).
             ~easypaperless.exceptions.TaskTimeoutError: If timeout is exceeded;
                 resume with ``client.tasks.wait(err.task_id)``.
         """

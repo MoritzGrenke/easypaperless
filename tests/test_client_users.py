@@ -26,7 +26,7 @@ USER_DATA = {
     "is_active": True,
     "is_superuser": False,
     "groups": [],
-    "user_permissions": ["documents.view_document"],
+    "user_permissions": ["view_document"],
     "inherited_permissions": ["documents.view_document", "documents.view_tag"],
     "is_mfa_enabled": False,
 }
@@ -42,7 +42,7 @@ def test_user_model_parses():
     user = User.model_validate(USER_DATA)
     assert user.id == 1
     assert user.username == "alice"
-    assert user.user_permissions == ["documents.view_document"]
+    assert user.user_permissions == ["view_document"]
     assert user.inherited_permissions == ["documents.view_document", "documents.view_tag"]
     assert user.is_mfa_enabled is False
 

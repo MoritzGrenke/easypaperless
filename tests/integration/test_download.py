@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from easypaperless import PaperlessClient
+from tests.integration._cleanup import purge_document
 
 # ---------------------------------------------------------------------------
 # Minimal PNG helper (pure Python, no external deps)
@@ -100,7 +101,7 @@ async def test_download_original_returns_png_not_pdf(client: PaperlessClient, ui
     finally:
         tmp_path.unlink(missing_ok=True)
         if doc is not None:
-            await client.documents.delete(doc.id)
+            await purge_document(client, doc.id)
 
 
 @pytest.mark.integration
@@ -133,4 +134,4 @@ async def test_download_archive_returns_pdf(client: PaperlessClient, uid: str) -
     finally:
         tmp_path.unlink(missing_ok=True)
         if doc is not None:
-            await client.documents.delete(doc.id)
+            await purge_document(client, doc.id)

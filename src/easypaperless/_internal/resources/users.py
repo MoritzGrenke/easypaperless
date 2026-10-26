@@ -110,7 +110,10 @@ class UsersResource:
             is_active: Whether the account is active.
             is_superuser: Grant unrestricted superuser access.
             groups: IDs of groups to assign the user to.
-            user_permissions: Directly assigned permission strings.
+            user_permissions: Directly assigned permission codenames, without
+                the app label (e.g. ``["view_document"]``).  The app-labelled
+                form ``"documents.view_document"`` is rejected by paperless-ngx
+                with a :exc:`~easypaperless.exceptions.BadRequestError`.
 
         Returns:
             The newly created :class:`~easypaperless.models.users.User`.
@@ -169,7 +172,10 @@ class UsersResource:
             is_active: Activate or deactivate the account.
             is_superuser: Grant or revoke superuser access.
             groups: IDs of groups to assign the user to.
-            user_permissions: Directly assigned permission strings.
+            user_permissions: Directly assigned permission codenames, without
+                the app label (e.g. ``["view_document"]``).  The app-labelled
+                form ``"documents.view_document"`` is rejected by paperless-ngx
+                with a :exc:`~easypaperless.exceptions.BadRequestError`.
 
         Returns:
             The updated :class:`~easypaperless.models.users.User`.

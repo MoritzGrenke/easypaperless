@@ -106,8 +106,17 @@ class NotesResource:
             note_id: Numeric ID of the note to delete.
 
         Raises:
-            ~easypaperless.exceptions.NotFoundError: If no document or note
-                exists with the given IDs.
+            ~easypaperless.exceptions.NotFoundError: If no document exists with
+                that ID.
+            ~easypaperless.exceptions.ServerResponseError: If the document has
+                no note with ``note_id``.  paperless-ngx answers an unknown note
+                ID with ``500 Server Error`` instead of 404 (verified against
+                paperless-ngx 2.18.2), so it cannot be told apart from a real
+                server error.  With ``retry_attempts`` set, the 500 is retried
+                like any other and ends in
+                :exc:`~easypaperless.exceptions.RetryExhaustedError`.  Use
+                ``notes.list(document_id)`` first if you need to be sure the
+                note exists.
         """
         logger.info("Deleting note id=%d from document id=%d", note_id, document_id)
         await self._core._session.delete(f"/documents/{document_id}/notes/", params={"id": note_id})
