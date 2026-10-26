@@ -76,3 +76,13 @@ A service configuring a paperless Delivery Target needs to verify URL and token 
 
 ## Additional Notes
 - Requester: ThruCapture Backend, Must-item 5 (version check). `system_status()` added to make the server-information area complete.
+
+---
+
+## Implementation Notes (assumptions, unverified)
+The live test instance was unreachable when this was implemented (see the 0.7.0 spike findings), so the spike was not run. The only observation: an **anonymous** `GET /api/` on another paperless-ngx instance returned `302` to `schema/view/` without `X-Version`.
+
+- `server_version()` sends an authenticated `GET /api/` and reads `X-Version`. Assumption: paperless-ngx's API version middleware sets `X-Version` on authenticated responses of the API root. The HTTP client follows redirects, so a foreign server's redirect to an HTML page ends as an HTML 200 without the header, which gives `NotPaperlessError`. A 404 is caught and re-raised as `NotPaperlessError` (`status_code=404`, `NotFoundError` as `__cause__`). 401/403 and transport errors keep their #0046 classes.
+- `system_status()` reads `GET /api/status/`. The `SystemStatus` shape follows the paperless-ngx 2.x `SystemStatusView` source: `pngx_version` (exposed as `version`; a plain `version` key is accepted too), `server_os`, `install_type`, `storage {total, available}`, `database {type, url, status, error, migration_status {latest_migration, unapplied_migrations}}`, `tasks {redis_url, redis_status, redis_error, celery_status, celery_url, celery_error, index_status, index_last_modified, index_error, classifier_status, classifier_last_trained, classifier_error, sanity_check_status, sanity_check_last_run, sanity_check_error}`. Every field is optional and `extra="ignore"`. The test fixture is modelled on that source; it is not a captured response.
+- Assumption: `/api/status/` requires an admin user (403 otherwise), as in the paperless source.
+- Still open: verify the authenticated `X-Version` header, the status shape and the status permission against a live instance (spike #0050 / re-run of the 0.7.0 spikes).

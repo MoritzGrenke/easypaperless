@@ -171,6 +171,7 @@ PaperlessError
 ├── BadRequestError             400 – .field_errors, .non_field_errors
 ├── NotFoundError               404, or a name that could not be resolved
 ├── ValidationError             422
+├── NotPaperlessError           server_version(): URL is not a paperless-ngx instance
 ├── ServerError
 │   ├── ServerResponseError     5xx response (status_code set)
 │   └── TransportError          no response: connection refused, DNS, TLS, protocol error
@@ -187,6 +188,7 @@ PaperlessError
 | `BadRequestError` | HTTP 400: paperless rejected the request data. `field_errors` maps field name → list of messages, `non_field_errors` holds the rest | `400` |
 | `NotFoundError` | HTTP 404, or a tag/correspondent/... name could not be resolved | `404` / `None` |
 | `ValidationError` | HTTP 422 | `422` |
+| `NotPaperlessError` | `server_version()`: the API root answered with 404, or with a response (e.g. an HTML page) without the `X-Version` header | the HTTP status |
 | `ServerResponseError` | HTTP 5xx, or a download returned an HTML page instead of the file | the HTTP status |
 | `TransportError` | paperless could not be reached: connection refused, DNS or TLS failure, broken connection. The original `httpx` exception is chained as `__cause__` | `None` |
 | `TransportTimeoutError` | the request timed out (the operation may still have completed on the server) | `None` |
@@ -219,6 +221,18 @@ except ServerResponseError as err:
 
 The default `retry_on` contains `ServerError` and therefore retries both transport errors and 5xx responses; pass `retry_on=(TransportError,)` to retry only when paperless was unreachable.
 
+## 🔒 Security: Secrets in Logs and Errors
+
+easypaperless never puts your API token into exception messages, `repr()` of clients/resources, or its own log records (at any level, including `DEBUG`). The `Authorization` header is never logged, and when request bodies are logged at `DEBUG`, `password` values (e.g. from `users.create()` / `users.update()`) are replaced by `"***"`.
+
+Not covered: secrets you put into URLs, query parameters or free-text fields (e.g. note text) yourself, and logging done by `httpx`/`httpcore`. Those libraries log at `DEBUG` under the `httpx` and `httpcore` loggers; keep them at `WARNING` or above in production:
+
+```python
+import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+```
+
 ## 📖 Functional Overview
 
 All functionality is accessed through resource attributes on the client (e.g. `client.documents`, `client.tags`). Both `PaperlessClient` (async) and `SyncPaperlessClient` (sync) expose the same resources and methods.
@@ -230,6 +244,20 @@ The `UNSET` sentinel (importable from `easypaperless`) allows you to distinguish
 ### Client
 
 * **PaperlessClient / SyncPaperlessClient** Token-based authentication. Configurable timeout, poll interval, and poll timeout for slow instances. Optional built-in retry-with-exponential-backoff for transient errors (`retry_attempts`, `retry_backoff`, `retry_on`); also accepts a pre-configured `tenacity.AsyncRetrying` instance for advanced retry strategies. Optional injectable `httpx` transport (`transport=`) for mock-based testing or custom proxy/TLS settings.
+* **server_version()** One cheap authenticated request (`GET /api/`) that returns the paperless-ngx version from the `X-Version` header, e.g. `"2.18.4"`. Use it as a "test connection" check: a refused token raises `AuthenticationError`, an unreachable server raises `TransportError`, and a URL that is not a paperless-ngx instance (404, or an HTML page without `X-Version`) raises `NotPaperlessError`.
+* **system_status()** Returns a `SystemStatus` model from `GET /api/status/`: version, install type, server OS, storage, database and migrations, plus the health of Redis, Celery, the search index and the classifier. All fields are optional. Requires an admin token (otherwise `PermissionDeniedError`).
+
+```python
+from easypaperless import NotPaperlessError
+
+try:
+    print(await client.server_version())     # "2.18.4"
+except NotPaperlessError:
+    print("this URL is not a paperless-ngx instance")
+
+status = await client.system_status()
+print(status.database.status, status.tasks.celery_status)
+```
 
 ### `client.documents` — Documents
 

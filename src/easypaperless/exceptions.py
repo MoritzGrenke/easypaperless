@@ -10,6 +10,7 @@ Every exception has a non-empty message and a ``status_code`` attribute
     ├── BadRequestError              400 (field_errors, non_field_errors)
     ├── NotFoundError                404 / unresolvable name
     ├── ValidationError              422
+    ├── NotPaperlessError            URL is not a paperless-ngx instance
     ├── ServerError
     │   ├── ServerResponseError      5xx
     │   └── TransportError           connection, DNS, TLS, protocol errors
@@ -107,6 +108,17 @@ class NotFoundError(PaperlessError):
 
 class ValidationError(PaperlessError):
     """Raised on 422 responses or bad input supplied by the caller."""
+
+
+class NotPaperlessError(PaperlessError):
+    """Raised when the configured URL does not point to a paperless-ngx instance.
+
+    Raised by :meth:`~easypaperless.PaperlessClient.server_version` when the
+    server answers the API root with 404, or with a successful response that
+    lacks paperless's ``X-Version`` header (e.g. an HTML page from another web
+    app or a reverse proxy). ``status_code`` holds the HTTP status of that
+    response.
+    """
 
 
 class ServerError(PaperlessError):
