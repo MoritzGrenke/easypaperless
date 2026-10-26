@@ -69,7 +69,10 @@ Task polling exists only as a private helper inside `documents.upload(wait=True)
 ## Dependencies & Constraints
 - Uses the injected transport from #0043 for tests.
 - Interacts with #0044 (upload) and #0046 (exception hierarchy); `UploadError` and `TaskTimeoutError` must fit into the reworked hierarchy.
-- Changing the `TaskTimeoutError` constructor is acceptable but must be noted in the CHANGELOG.
+- **Backward compatibility:** `TaskTimeoutError(message)` and `UploadError(message)` must keep working; `task_id` / `task` are added as optional keyword arguments, so this is not a breaking change.
+- **Pagination:** `GET /api/tasks/` returns a plain list today (the current polling code reads `resp.json()[0]`), so the generic `_list_resource` helper does not fit. Since #0029 every `list()` returns a `PagedResult`; `tasks.list()` must build it itself, like `notes.list()` does (#0032, #0034).
+- **Naming:** parameter names for `tasks.wait()` (`poll_interval` / `timeout` vs. `poll_timeout`) are decided together with #0044 in `/architecture`.
+- **File size:** the tasks logic goes into its own resource modules (async and sync), and today's `_poll_task` moves out of `resources/documents.py` (already ~1100 lines). The `Task` / `TaskStatus` models move to their own model module and stay importable from `easypaperless.models.documents`.
 
 ---
 

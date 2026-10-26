@@ -70,6 +70,8 @@ A delivery worker must decide per error whether to retry, alert, or give up — 
 
 ## Dependencies & Constraints
 - Must stay backward compatible: new classes are subclasses of the existing ones.
+- **Single mapping point:** today the transport-error mapping is duplicated in four places in the HTTP layer (single request, download with redirects, and twice in the fetching of follow-up pages). Downloads and follow-up pages also bypass the retry loop. The mapping must be consolidated into one place so that every request path raises the same classes; whether downloads and follow-up pages should also be retried is decided in `/architecture`.
+- Acceptance tests must cover all request paths: single request, download, and follow-up pages of a paginated list.
 - Interacts with #0045 (`UploadError`, `TaskTimeoutError`) and #0041 (retry: the transport subclass must remain retryable by default).
 
 ---

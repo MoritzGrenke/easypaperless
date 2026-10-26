@@ -51,6 +51,7 @@ A service configuring a paperless Delivery Target needs to verify URL and token 
 - [ ] `server_version()` sends exactly one request and that request is authenticated.
 - [ ] With a refused token (401) it raises the 401 `AuthError` subclass.
 - [ ] When the response lacks `X-Version`, it raises the "not a paperless" error and the message says so.
+- [ ] A 404 on the version request and a 200 HTML page without `X-Version` both raise the "not a paperless" error (not `NotFoundError`).
 - [ ] A transport failure raises the transport `ServerError` subclass (#0046).
 - [ ] `system_status()` returns a `SystemStatus` populated from a recorded paperless response; unknown extra fields do not cause errors.
 - [ ] `system_status()` with a non-admin token raises the 403 subclass.
@@ -60,6 +61,11 @@ A service configuring a paperless Delivery Target needs to verify URL and token 
 
 ## Dependencies & Constraints
 - Depends on the error classes of #0046 and the transport of #0043.
+- **Detecting "not a paperless":** the generic status mapping would raise `NotFoundError` for a foreign server answering `/api/` with 404, before the header is ever checked. `server_version()` needs its own handling so that these cases raise the "not a paperless" error:
+  - 404 on the version request,
+  - 200 with an HTML page (e.g. a proxy or another web app) and no `X-Version` header,
+  - any other successful response without `X-Version`.
+  401 and 403 keep raising the `AuthError` subclasses.
 
 ---
 

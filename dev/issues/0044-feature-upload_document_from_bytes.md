@@ -20,6 +20,7 @@ Part of the 0.7.0 "Delivery Target" milestone requested by the ThruCapture Backe
 - No temporary file is written in any case.
 - `timeout` sets the HTTP timeout of the upload request itself, overriding the client's timeout for this call only. The existing `poll_interval` / `poll_timeout` parameters keep their meaning for `wait=True`.
 - `wait=False` keeps returning the task ID; `wait=True` keeps returning the `Document`.
+- **The upload request is never retried automatically**, regardless of the client's retry configuration (#0041). Today `post_document` runs through the retry loop: if a timeout occurs after paperless has already accepted the file, the retry uploads it a second time and creates a duplicate. A failed upload request must surface as an error so that the caller can decide (e.g. check by checksum, #0050) whether the document already exists. The same rule applies to other non-idempotent POST requests (to be listed in `/architecture`).
 
 ---
 
@@ -35,6 +36,7 @@ Part of the 0.7.0 "Delivery Target" milestone requested by the ThruCapture Backe
 ### In Scope
 - `bytes` support, `filename`, `content_type` and `timeout` parameters on async and sync `upload()`.
 - Validation: `bytes` without `filename` raises a local error (no HTTP request).
+- Excluding the upload request (and other non-idempotent POSTs) from automatic retries; docs of `retry_attempts` / `tenacity_retrying` updated accordingly.
 - Docstring and user doc updates.
 - Tests using the injected transport (#0043) that assert the multipart body contains the given file name, content type and bytes.
 
@@ -54,11 +56,14 @@ Part of the 0.7.0 "Delivery Target" milestone requested by the ThruCapture Backe
 - [ ] No temporary file is created during a bytes upload (verified by test).
 - [ ] `upload(..., timeout=120)` uses 120 s for the upload request while other requests keep the client's timeout.
 - [ ] The sync client offers the same parameters with identical behaviour.
+- [ ] With `retry_attempts=3`, a transport error or timeout on the upload request results in exactly **one** request being sent and the error being raised (no retry). The same holds with `tenacity_retrying`.
+- [ ] Retries for idempotent requests (e.g. GET) keep working as before.
 
 ---
 
 ## Dependencies & Constraints
 - Tests should use the injected transport from #0043.
+- **Naming must be decided before implementation:** `upload()` already has `poll_interval` / `poll_timeout` (task polling), this issue adds `timeout` (HTTP request), and #0045 adds `tasks.wait(timeout=...)` (total wait time). `timeout` would then mean different things in `upload()` and `tasks.wait()`. `/architecture` decides on consistent names for both issues together.
 - The task polling used by `wait=True` is reworked in #0045; this issue must not change its results.
 
 ---

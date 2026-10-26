@@ -7,9 +7,9 @@ State Python 3.13 as supported, test it in CI, and release the 0.7.0 milestone (
 
 ## Task Description
 - Add Python 3.13 to the package classifiers.
-- Run the test suite, lint and type check on Python 3.11, 3.12 and 3.13 in CI (test matrix).
+- **Create a CI workflow** that runs the test suite, `ruff check`, `ruff format --check` and `mypy` on Python 3.11, 3.12 and 3.13 (test matrix) on every push and pull request. Today only the two publish workflows exist; tests, lint and type check never run in CI.
 - Fix any incompatibility found on 3.13.
-- After #0043–#0050 are done: update CHANGELOG (including breaking changes such as the `TaskTimeoutError` constructor), docs and README, bump the version to 0.7.0, build and publish to PyPI, and tag the release.
+- After #0043–#0050 are done: update CHANGELOG (calling out any breaking changes), docs and README, bump the version to 0.7.0, build and publish to PyPI, and tag the release.
 
 ---
 
@@ -21,7 +21,8 @@ The ThruCapture Backend runs on Python 3.13 and pins easypaperless exactly; it n
 ## Scope
 
 ### In Scope
-- Classifiers, CI matrix (3.11, 3.12, 3.13), 3.13 fixes.
+- Classifiers, new CI test workflow with matrix (3.11, 3.12, 3.13), 3.13 fixes.
+- Integration tests (live instance) stay manual and are not part of CI.
 - Release 0.7.0: changelog, docs (pdoc), version bump, PyPI publish, git tag.
 
 ### Out of Scope
@@ -32,7 +33,7 @@ The ThruCapture Backend runs on Python 3.13 and pins easypaperless exactly; it n
 
 ## Acceptance Criteria
 - [ ] `pyproject.toml` lists Python 3.13 in its classifiers.
-- [ ] CI runs tests, ruff and mypy on 3.11, 3.12 and 3.13 and all pass.
+- [ ] A CI workflow runs on every push and pull request and executes tests, ruff (check + format check) and mypy on 3.11, 3.12 and 3.13; all pass.
 - [ ] CHANGELOG has a 0.7.0 entry covering #0043–#0050, with breaking changes called out.
 - [ ] Version 0.7.0 is published on PyPI and installable with `pip install easypaperless==0.7.0` on Python 3.13.
 - [ ] A `v0.7.0` git tag exists.
